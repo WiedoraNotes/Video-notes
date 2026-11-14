@@ -134,6 +134,74 @@ class GuiNotesHeadlessTest(unittest.TestCase):
         finally:
             release.set()
 
+    def test_completed_asr_does_not_load_different_project_selected_mid_run(self):
+        """GUI shows a clear warning instead of silently opening the wrong project."""
+        self.assertTrue(self.gui._load())
+        self.gui.source.set(str(self.folder / "input.mp4"))
+        self.gui.model.set(str(self.folder / "model.bin"))
+        self.gui.streams = {"1: capture": 1}
+        self.gui.stream.set("1: capture")
+        old = self.gui._loaded_project_path
+        next_folder = self.folder / "different-project"
+        started = threading.Event()
+        release = threading.Event()
+        def transcribe_stub(*args, **kwargs):
+            started.set()
+            if not release.wait(timeout=5):
+                raise AssertionError("Background test timeout")
+            return {}
+
+        try:
+            with patch("videonotes.gui.create_project"), \
+                 patch("videonotes.gui.transcribe_project", side_effect=transcribe_stub) as work, \
+                 patch("videonotes.gui.export_project", return_value=[]), \
+                 patch.object(self.gui, "_load", wraps=self.gui._load) as reload, \
+                 patch("videonotes.gui.messagebox.showwarning") as warning:
+                self.gui._work(resume=False)
+                self.assertTrue(started.wait(timeout=4))
+                self.gui.project.set(str(next_folder))
+                release.set()
+                for _ in range(200):
+                    self.root.update()
+                    if not self.gui.active:
+                        break
+                    time.sleep(0.015)
+                self.assertFalse(self.gui.active)
+                work.assert_called_once()
+                self.assertEqual(work.call_args.args[0], self.folder)
+                reload.assert_not_called()
+                self.assertEqual(self.gui.project.get(), str(next_folder))
+                self.assertEqual(self.gui._loaded_project_path, old)
+                self.assertIn("Zmieniono katalog projektu", self.gui.status.get())
+                self.assertIn("pierwotny katalog", self.gui.status.get())
+                self.assertIsNone(self.gui._active_transcription_folder)
+                warning.assert_not_called()
+        finally:
+            release.set()
+
+    def test_unchanged_project_after_asr_still_auto_loads_original(self):
+        self.gui.source.set(str(self.folder / "input.wav"))
+        self.gui.model.set(str(self.folder / "model.bin"))
+        self.gui.streams = {"0: capture": 0}
+        self.gui.stream.set("0: capture")
+        with patch("videonotes.gui.create_project"), \
+             patch("videonotes.gui.transcribe_project", return_value={}), \
+             patch("videonotes.gui.export_project", return_value=[]), \
+             patch.object(self.gui, "_load", wraps=self.gui._load) as reload, \
+             patch("videonotes.gui.messagebox.showwarning") as warning:
+            self.gui._work(resume=False)
+            for _ in range(200):
+                self.root.update()
+                if not self.gui.active:
+                    break
+                time.sleep(0.015)
+            self.assertFalse(self.gui.active)
+            reload.assert_called_once_with(silent=True)
+            self.assertEqual(self.gui._loaded_project_path, self.folder)
+            self.assertNotIn("Zmieniono katalog projektu", self.gui.status.get())
+            self.assertIsNone(self.gui._active_transcription_folder)
+            warning.assert_not_called()
+
     def test_resume_does_not_read_unused_tk_source_settings_in_worker(self):
         """Resume requires only the chosen project path, not mutable form state."""
         self.gui.source.set("")
