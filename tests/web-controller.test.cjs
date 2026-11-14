@@ -159,6 +159,26 @@ test("actual file byte size above 20 MiB is rejected despite small declared File
   assert.match(ux.elements["match-count"].textContent, /^1 z 1/);
 });
 
+test("browser cannot save or export a correction containing isolated Unicode surrogate", async () => {
+  const ux = boot();
+  await ux.importFile(source("unicode-scalar", 1));
+  ux.select(0);
+  ux.elements["edit-text"].value = "Niedozwolony znak \ud800";
+  ux.elements["edit-text"].events.input();
+  ux.elements["save-edit"].events.click();
+  assert.match(ux.elements["status"].textContent, /niedozwolony znak/);
+  assert.equal(ux.elements["edit-count"].textContent, "0 poprawek w pamięci");
+  ux.exportButtons[0].events.click();
+  assert.equal(ux.state.downloads.length, 0);
+  ux.elements["edit-text"].value = "Poprawnie 😀";
+  ux.elements["edit-text"].events.input();
+  ux.elements["save-edit"].events.click();
+  assert.equal(ux.elements["edit-count"].textContent, "1 poprawek w pamięci");
+  ux.exportButtons[0].events.click();
+  assert.equal(ux.state.downloads.length, 1);
+  assert.match(ux.state.downloads[0].payload, /Poprawnie 😀/);
+});
+
 test("pending textarea changes are protected when selecting a different segment", async () => {
   const ux = boot();
   await ux.importFile(source("original", 2));

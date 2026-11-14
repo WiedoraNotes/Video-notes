@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from .contracts import sha256_file
+from .contracts import sha256_file, valid_unicode_text
 from .errors import VideoNotesError
 from .media import executable
 from .notes import _hash, _select, _source
@@ -44,7 +44,7 @@ SOURCE_SCHEMA = {
 
 
 def _safe_text(value: object, limit: int) -> bool:
-    return isinstance(value, str) and bool(value.strip()) and len(value) <= limit and "\x00" not in value
+    return valid_unicode_text(value) and bool(value.strip()) and len(value) <= limit
 
 
 def _existing_model(model: Path) -> Path:

@@ -66,12 +66,32 @@ test("desktop, mobile and browser reject the same malformed source fields", () =
   push(doc => { doc.segments[1].start_ms = true; });
   push(doc => { doc.segments[0].text = "😀".repeat(5001); });
   push(doc => { doc.segments[1].id = "../bad"; });
+  push(doc => { doc.project_id = "\ud800"; });
+  push(doc => { doc.segments[0].text = "Prefix\ud800postfix"; });
+  push(doc => { doc.segments[1].text = "\udc00"; });
   bad.push('{"schema":"videonotes-export-v1","schema":"fake","project_id":"x","language":"pl","complete":true,"segments":[]}');
   bad.push('{"schema":"videonotes-export-v1","project_id":"x","language":"pl","complete":true,"segments":[{"id":"x","start_ms":0,"end_ms":3,"text":"ok","text":"fake"}]}');
   for (const [i, raw] of bad.entries()) {
     assert.throws(() => core.parseExport(raw), undefined, "Browser accepted invalid fixture " + i);
     const result = pythonParse(raw);
     assert.equal(result.status, 2, "Python accepted invalid fixture " + i);
+  }
+});
+
+test("browser and Python corrections reject isolated surrogate code units without replacing text", () => {
+  const doc = documentFixture();
+  assert.equal(core.validText("Zażółć 😀", 10000), true);
+  for (const broken of ["\ud800", "\udc00", "bad\ud800tail"]) {
+    assert.equal(core.validText(broken, 10000), false);
+    const modified = {...doc, segments: doc.segments.map((s, i) =>
+      i === 0 ? {...s, text: broken} : s)};
+    assert.throws(() => core.renderExport(modified, {}, "transcript.json"));
+    assert.throws(() => core.renderCorrections(doc, {"c0000000-s00000": broken}));
+    const patch = JSON.parse(core.renderCorrections(doc, {"c0000000-s00000": "new"}));
+    patch.changes[0].after = broken;
+    assert.throws(() => core.parseCorrections(doc, JSON.stringify(patch)));
+    const py = pythonCorrections({mode: "parse", document: doc, raw: JSON.stringify(patch)});
+    assert.equal(py.status, 2);
   }
 });
 

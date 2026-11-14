@@ -11,6 +11,7 @@ import re
 from typing import Any
 
 from .errors import VideoNotesError
+from .contracts import valid_unicode_text
 
 SCHEMA = "videonotes-export-v1"
 MAX_JSON_BYTES = 20 * 1024 * 1024
@@ -26,7 +27,7 @@ def _utf16_units(value: str) -> int:
 
 
 def _text(value: Any, max_units: int) -> bool:
-    return isinstance(value, str) and "\x00" not in value and _utf16_units(value) <= max_units
+    return valid_unicode_text(value) and _utf16_units(value) <= max_units
 
 
 def _timestamp(value: Any) -> bool:

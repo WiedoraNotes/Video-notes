@@ -54,3 +54,25 @@ Przetwarzanie VN-01 tworzy segment WAV w nowym katalogu tymczasowym. Silnik uży
 ## Spójność eksportu transkrypcji TXT/SRT/VTT/JSON (12.11.2026)
 
 Eksport używa wspólnej blokady `.transcript-edits.lock` przez odczyt i zapis wszystkich czterech formatów, aby współpracujące edytory nie zmieniały poprawek podczas publikacji. Dodatkowo ponownie przygotowuje i porównuje wszystkie cztery formaty z aktualną transkrypcją oraz ręcznymi poprawkami **zanim zacznie nadpisywać istniejące pliki wynikowe**. Jeśli użytkownik wprowadzi poprawkę w trakcie pierwszego renderowania, narzędzie odmawia publikacji starych napisów i zachowuje wcześniejsze eksporty. Testy syntetyczne sprawdzają zarówno taką kolizję, jak i zwykły eksport czterech spójnych formatów. Nie oznacza to atomowej transakcji obejmującej cztery pliki po rozpoczęciu zapisu; przerwanie dysku w połowie publikacji nadal wymaga osobnego mechanizmu odzyskiwania.
+
+## Spójność Unicode między Pythonem i przeglądarką — 14.11.2026
+
+W wersjonowanych plikach transkrypcji i poprawek obowiązuje poprawny,
+jednoznaczny tekst Unicode: polskie znaki i emoji (prawidłowa para
+UTF-16 dla kodów spoza BMP) są akceptowane. Niedozwolone są pojedyncze
+`surrogate code points` U+D800–U+DFFF, które mogą znaleźć się w
+ciągach JSON zapisanych jako `\\uD800` lub `\\uDC00`.
+
+Pythonowy `json.loads` sam w sobie akceptuje takie sekwencje, choć
+przy późniejszym zapisie UTF-8 mogą powodować wyjątek kodowania.
+JavaScript pozwala zachować je jako tekst, ale przy tworzeniu Blob może
+bez ostrzeżenia zastąpić je znakiem U+FFFD. Wspólna walidacja
+`videonotes/contracts.py` oraz walidator JS odrzucają je zatem
+**przed zapisaniem projektu, poprawki lub eksportu**. Dotyczy to
+także propozycji notatek modelu lokalnego oraz edycji w interfejsie
+WWW. Poprawny, dosłownie wpisany znak U+FFFD nie jest odrzucany.
+
+Regresje syntetyczne sprawdzają zgodność Python/Node, brak częściowego
+zapisu poprawek, poprawny UTF-8 i emoji oraz ochronę oryginalnego ASR.
+To nie jest próba jakości transkrypcji z prawdziwej mowy ani odbiór
+fizycznych urządzeń.
