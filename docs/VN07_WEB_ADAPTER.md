@@ -104,3 +104,24 @@ Regresje obejmują oba kierunki importu, polskie znaki i Unicode,
 rzeczywistą przeglądarkę Chromium w CI oraz niezapisywanie prywatnego
 tekstu. Nie oznacza to ręcznego odbioru czytnika ekranu, fizycznego
 Windows, pełnej dostępności ani regresji hosta Wiedora.
+
+## Wyszukiwanie w dużych eksportach — 14.11.2026
+
+Po bezpiecznym imporcie dokument `videonotes-export-v1` jest walidowany
+tylko raz przed przekazaniem do kontrolera. Każde wpisanie litery,
+poprawienie tekstu lub cofnięcie edycji wywoływało wcześniej
+`core.search`, ponownie walidujące i kopiujące cały dokument.
+Przy maksymalnie 50 000 wypowiedzi był to zbędny koszt pamięci i CPU.
+
+Kontroler korzysta teraz z `searchPrepared`, który nie odbudowuje
+50 000 segmentów, ale odmawia działania z dowolnym niezwalidowanym
+obiektem. Do szybkiej ścieżki trafia tylko dokładnie zweryfikowany
+wynik `core.parseExport` (identyfikacja przez WeakSet).
+Publiczne `core.search` nadal w pełni waliduje obce obiekty,
+żeby zewnętrzne wywołania nie pomijały ochrony kontraktu.
+
+Test Node odczytuje syntetyczne 50 000 segmentów i sprawdza
+stronicowanie, wyszukiwanie końcowego segmentu oraz poprawkę
+zmieniającą wyniki wyszukania. Nie stanowi to testu ręcznej
+dostępności, fizycznego Windows/NVDA ani gwarancji płynności
+na konkretnym słabym urządzeniu. Treści nie są wysyłane do sieci.
