@@ -98,7 +98,7 @@ def export_mobile_corrections_file(
 
 
 MOBILE_EDIT_DRAFT_SCHEMA = "videonotes-mobile-edit-draft-v2"
-_SHA256 = re.compile(r"[a-f0-9]{64}\\Z", re.ASCII)
+_SHA256 = re.compile("[a-f0-9]{64}", re.ASCII)
 
 
 def export_mobile_edit_draft_file(
