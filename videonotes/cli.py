@@ -429,8 +429,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(json.dumps({
                 "schema": "videonotes-web-corrections-v1",
-                "submitted_edits": len(edits), "draft_sha256": draft_sha256,
-                **report,
+                "submitted_edits": len(edits), **report,
             }, ensure_ascii=False))
         elif args.action == "status":
             project, transcript, edits = read_project(args.project)
