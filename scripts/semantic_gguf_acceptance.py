@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from videonotes.asr_lab import _stop_process_tree
 from videonotes.errors import VideoNotesError
 from videonotes.gguf_probe import inspect_gguf_header
+from videonotes.semantic_process import run_bounded_llama
 from videonotes.semantic_draft import (
     _safe_new_json, create_semantic_draft, verify_semantic_draft,
 )
@@ -29,40 +30,35 @@ class MetricsRunner:
         self.runs = []
 
     def __call__(self, command, **options):
-        timeout = options.pop("timeout")
-        options.pop("check", None)
-        launch = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
-                  if os.name == "nt" else {"start_new_session": True})
+        """Sample the same bounded process used by semantic-draft CLI."""
         start = time.perf_counter()
-        proc = subprocess.Popen(command, **options, **launch)
         peak, cpu = None, None
-        try:
-            watcher = psutil.Process(proc.pid) if psutil else None
-            while proc.poll() is None:
-                if time.perf_counter() - start > timeout:
-                    _stop_process_tree(proc)
-                    raise subprocess.TimeoutExpired(command, timeout)
-                if watcher:
+        watcher = None
+
+        def sample(proc):
+            nonlocal peak, cpu, watcher
+            if psutil is None:
+                return
+            try:
+                if watcher is None:
+                    watcher = psutil.Process(proc.pid)
+                rss, used = 0, 0.0
+                for member in [watcher, *watcher.children(recursive=True)]:
                     try:
-                        rss, used = 0, 0.0
-                        for member in [watcher, *watcher.children(recursive=True)]:
-                            try:
-                                rss += member.memory_info().rss
-                                times = member.cpu_times()
-                                used += times.user + times.system
-                            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                                continue
-                        peak, cpu = max(peak or 0, rss), max(cpu or 0.0, used)
+                        rss += member.memory_info().rss
+                        times = member.cpu_times()
+                        used += times.user + times.system
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        pass
-                time.sleep(0.05)
-            self.runs.append({"elapsed_s": round(time.perf_counter()-start, 3),
-                              "peak_rss_bytes": peak,
-                              "sampled_cpu_s": round(cpu, 3) if cpu is not None else None})
-            return subprocess.CompletedProcess(command, proc.returncode)
-        finally:
-            if proc.poll() is None:
-                _stop_process_tree(proc)
+                        continue
+                peak, cpu = max(peak or 0, rss), max(cpu or 0.0, used)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+
+        result = run_bounded_llama(command, observer=sample, **options)
+        self.runs.append({"elapsed_s": round(time.perf_counter()-start, 3),
+                          "peak_rss_bytes": peak,
+                          "sampled_cpu_s": round(cpu, 3) if cpu is not None else None})
+        return result
 
 
 def run(project: Path, model: Path, binary: str, out: Path) -> dict:
