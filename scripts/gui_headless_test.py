@@ -202,7 +202,8 @@ class GuiNotesHeadlessTest(unittest.TestCase):
             reload.assert_called_once_with(silent=True)
             # Windows runner may use a TEMP short (8.3) pathname; the GUI
             # stores the resolved canonical path when loading a project.
-            self.assertEqual(self.gui._loaded_project_path, self.folder.resolve())\n            self.assertNotIn("Zmieniono katalog projektu", self.gui.status.get())
+            self.assertEqual(self.gui._loaded_project_path, self.folder.resolve())
+            self.assertNotIn("Zmieniono katalog projektu", self.gui.status.get())
             self.assertIsNone(self.gui._active_transcription_folder)
             warning.assert_not_called()
 
