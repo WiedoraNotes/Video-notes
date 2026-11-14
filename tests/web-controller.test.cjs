@@ -179,6 +179,33 @@ test("browser cannot save or export a correction containing isolated Unicode sur
   assert.match(ux.state.downloads[0].payload, /Poprawnie 😀/);
 });
 
+test("50k segment offline viewer searches, edits and paginates without rebuilding entire transcript", async () => {
+  const ux = boot();
+  const large = source("large-50k", 50000);
+  // 50,000 * 1.5s stays below the portable maximum 24-hour timestamp.
+  await ux.importFile(large);
+  assert.equal(ux.elements["match-count"].textContent, "50000 z 50000 wypowiedzi");
+  assert.equal(ux.elements["segment-rows"].children.length, 75);
+  ux.elements["search"].value = "text 49999";
+  ux.elements["search"].events.input();
+  assert.equal(ux.elements["match-count"].textContent, "1 z 50000 wypowiedzi");
+  assert.equal(ux.elements["segment-rows"].children.length, 1);
+  const only = ux.elements["segment-rows"].children[0].children[1].children[0];
+  assert.match(only.textContent, /text 49999/);
+  only.events.click();
+  assert.match(ux.elements["selected-label"].textContent, /seg-49999/);
+  ux.elements["edit-text"].value = "Poprawiono ostatni segment";
+  ux.elements["save-edit"].events.click();
+  assert.equal(ux.elements["match-count"].textContent, "0 z 50000 wypowiedzi");
+  ux.elements["search"].value = "Poprawiono";
+  ux.elements["search"].events.input();
+  assert.equal(ux.elements["match-count"].textContent, "1 z 50000 wypowiedzi");
+  assert.equal(ux.elements["segment-rows"].children.length, 1);
+  assert.match(ux.elements["segment-rows"].children[0].children[1].children[0].textContent,
+               /Poprawiono ostatni segment/);
+  assert.equal(ux.elements["edit-count"].textContent, "1 poprawek w pamięci");
+});
+
 test("pending textarea changes are protected when selecting a different segment", async () => {
   const ux = boot();
   await ux.importFile(source("original", 2));

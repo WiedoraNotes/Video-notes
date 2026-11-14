@@ -70,6 +70,23 @@ test("browser patch import refuses duplicate edit after fields before applying a
   assert.equal(core.parseCorrections(doc, patch)[doc.segments[0].id], edited[doc.segments[0].id]);
 });
 
+test("prepared search uses validated import only and remains equivalent to strict public search", () => {
+  const raw = fixture();
+  const parsed = core.parseExport(JSON.stringify(raw));
+  const edits = Object.create(null);
+  edits["c0000000-s00001"] = "IPv4 bez DHCP";
+  for (const term of ("", "DHCP", "IPv4", "protokół", "C0000000", "nieobecne")) {
+    assert.deepEqual(core.searchPrepared(parsed, edits, term), core.search(parsed, edits, term));
+  }
+  assert.throws(() => core.searchPrepared(raw, edits, ""), /sprawdzonego lokalnego eksportu/);
+  assert.throws(() => core.searchPrepared(null, edits, ""), /sprawdzonego lokalnego eksportu/);
+  assert.throws(() => core.searchPrepared(core.validateExport(raw), edits, ""),
+                /sprawdzonego lokalnego eksportu/);
+  parsed.segments[0].text = "Only in-memory canonical copy";
+  assert.deepEqual(core.searchPrepared(parsed, edits, "Only in-memory"), [0]);
+  assert.equal(raw.segments[0].text, "Dzień dobry, witam na wykładzie.");
+});
+
 test("parse validates schema and returns independent source copy", () => {
   const raw = fixture();
   const parsed = core.parseExport(JSON.stringify(raw));

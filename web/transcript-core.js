@@ -5,6 +5,9 @@
 (function (root) {
   "use strict";
   var SCHEMA = "videonotes-export-v1";
+  // Mark exact canonical objects returned by parseExport; only those can use
+  // the fast search path without rebuilding 50k validated segments per query.
+  var preparedDocuments = new WeakSet();
   var MAX_BYTES = 20 * 1024 * 1024;
   var MAX_SEGMENTS = 50000;
   var MAX_TEXT = 10000;
@@ -152,7 +155,9 @@
     var parsed;
     try { parsed = parseUniqueJSON(source); }
     catch (error) { if (error.message.includes("Zduplikowany klucz JSON")) throw error; reject("Plik nie jest poprawnym JSON."); }
-    return validateExport(parsed);
+    var validated = validateExport(parsed);
+    preparedDocuments.add(validated);
+    return validated;
   }
   function clock(ms, vtt) {
     if (!validTime(ms)) reject("Nieprawidłowy znacznik czasu.");
@@ -300,11 +305,12 @@
     }
     return Math.max(0, left - 1);
   }
-  function search(model, edits, term) {
-    var doc = validateExport(model);
+  function searchRows(segments, edits, term) {
     var query = String(term || "").trim().toLocaleLowerCase();
     var results = [];
-    doc.segments.forEach(function (s, index) {
+    // Do not clone or revalidate already-parsed segments when typing queries.
+    // The caller must establish validity at the input boundary.
+    segments.forEach(function (s, index) {
       var edited = edits && Object.prototype.hasOwnProperty.call(edits, s.id) ?
         edits[s.id] : s.text;
       if (!query || String(edited).toLocaleLowerCase().includes(query) ||
@@ -314,6 +320,18 @@
     });
     return results;
   }
+  function search(model, edits, term) {
+    // Public compatibility API still checks untrusted documents on every call.
+    return searchRows(validateExport(model).segments, edits, term);
+  }
+  function searchPrepared(model, edits, term) {
+    // Only a canonical document returned by strict parseExport can bypass
+    // redundant full JSON validation; arbitrary caller-created objects fail.
+    if (!model || !preparedDocuments.has(model)) {
+      reject("Przeszukiwanie wymaga sprawdzonego lokalnego eksportu.");
+    }
+    return searchRows(model.segments, edits, term);
+  }
   var core = {
     SCHEMA: SCHEMA, MAX_BYTES: MAX_BYTES, MAX_TEXT: MAX_TEXT, MAX_OUTPUT_BYTES: MAX_OUTPUT_BYTES, MAX_PATCH_BYTES: MAX_PATCH_BYTES,
     validText: validText,
@@ -321,7 +339,7 @@
     clock: clock, corrected: corrected, renderExport: renderExport,
     renderExports: renderExports, renderCorrections: renderCorrections,
     parseCorrections: parseCorrections, locateAtTime: locateAtTime,
-    search: search
+    search: search, searchPrepared: searchPrepared
   };
   if (typeof module !== "undefined" && module.exports) module.exports = core;
   root.VideoNotesWebCore = core;
