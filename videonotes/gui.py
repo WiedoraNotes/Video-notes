@@ -203,7 +203,7 @@ class VideoNotesWindow:
         folder = Path(project_path)
         # Remember the exact project targeted by this run even if the user
         # edits the project selector while the background task is running.
-        self._active_transcription_folder = folder.expanduser().absolute()
+        self._active_transcription_folder = folder.expanduser().resolve()
         self.cancel.clear()
         self.active = True
         self.start_button.configure(state="disabled")
@@ -749,9 +749,18 @@ class VideoNotesWindow:
                     # of this completed ASR operation. Preserve the newly
                     # selected folder and let its owner explicitly open it.
                     selected_folder = self.project.get().strip()
+                    # The same Windows directory can be selected under either
+                    # a canonical long name or an 8.3 short path. Resolve both
+                    # before deciding that the user switched projects.
+                    try:
+                        selected_canonical = (
+                            Path(selected_folder).expanduser().resolve()
+                            if selected_folder else None
+                        )
+                    except (OSError, RuntimeError):
+                        selected_canonical = None
                     changed = (completed_folder is not None
-                               and (not selected_folder or
-                                    Path(selected_folder).expanduser().absolute() != completed_folder))
+                               and selected_canonical != completed_folder)
                     if changed:
                         self.status.set(
                             str(data) + " Zmieniono katalog projektu w trakcie przetwarzania. "
