@@ -61,3 +61,32 @@ oraz odpowiedzi opcjonalnego modelu semantycznego. Brak częściowego zapisu
 Regresje uruchamiają syntetyczne zagnieżdżone dane na GitHub Actions,
 ale nie są testem fizycznego Windows, sprzętowego ASR ani pełnym audytem
 bezpieczeństwa. Wszystkie odbiory użytkownika pozostają do wykonania.
+
+## Zintegrowany audyt wymiany desktop–WWW–mobile, bez zapisu (14.11.2026)
+
+Polecenie `handoff-audit` sprawdza **cały lokalny przepływ plików**.
+Najpierw kontroluje ograniczony eksport przenośny, porównuje jego treść z
+aktualnym obrazem poprawionej transkrypcji w projekcie Windows, a następnie
+opcjonalnie sprawdza jedną paczkę poprawek zarówno przez walidator
+przenośny, jak i przez desktopowy podgląd `import-web-edits`.
+Na końcu ponownie sprawdza SHA-256 obu plików oraz aktualny projekt.
+
+~~~powershell
+python -m videonotes export "C:\KWN\projekt"
+python -m videonotes handoff-audit "C:\KWN\projekt" --source "C:\KWN\projekt\exports\transcript.json"
+python -m videonotes handoff-audit "C:\KWN\projekt" --source "C:\KWN\projekt\exports\transcript.json" --patch "C:\KWN\prywatne\web-corrections.json"
+~~~
+
+Raport wypisuje tylko liczbę segmentów, SHA-256, rozmiary i liczbę
+zmienianych/niezmienianych segmentów; **nie wypisuje tekstu wypowiedzi,
+identyfikatora projektu ani prywatnych ścieżek** przy poprawnej walidacji.
+Nie tworzy ani nie aktualizuje plików projektu. Różnice w białych znakach
+lub kolejności pól pliku JSON są dozwolone, jeśli jego zwalidowana treść
+jest zgodna z bieżącym projektem. Zmiana źródła lub paczki po pierwszym
+odczycie przerywa audyt. W celu rzeczywistego zastosowania patcha nadal
+potrzebne jest **osobne, świadome** `import-web-edits --apply`.
+
+PASS audytu oznacza wyłącznie zgodność plików *w chwili podglądu*, a nie
+zabezpieczenie przed obcym procesem dokonującym zmian po zakończeniu
+polecenia. Nie oznacza testu fizycznego Windows, NVDA, Android/iOS,
+prawdziwej mowy ani gotowości Wiedory do publikacji.

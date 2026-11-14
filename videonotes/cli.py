@@ -10,6 +10,7 @@ from . import __version__
 from .errors import VideoNotesError
 from .exports import edit_segment, export_project
 from .web_corrections import import_web_corrections
+from .handoff_audit import audit_offline_handoff
 from .mobile_import import (
     import_portable_file, import_mobile_corrections_file,
     export_mobile_corrections_file, export_mobile_edit_draft_file,
@@ -77,6 +78,10 @@ def parser() -> argparse.ArgumentParser:
     edit_lock_recover = sub.add_parser("edit-lock-recover", help="Usuń tylko potwierdzoną osieroconą blokadę poprawek")
     edit_lock_recover.add_argument("project", type=Path)
     edit_lock_recover.add_argument("--confirm", action="store_true", help="Jawna zgoda na odzyskanie po martwym procesie")
+    handoff = sub.add_parser("handoff-audit", help="Bez zapisu porównaj eksport WWW/paczkę poprawek z aktualnym projektem Windows")
+    handoff.add_argument("project", type=Path)
+    handoff.add_argument("--source", required=True, type=Path, help="Lokalny eksport exports/transcript.json")
+    handoff.add_argument("--patch", type=Path, help="Opcjonalna paczka poprawek web-corrections.json")
     web_edits = sub.add_parser("import-web-edits", help="Sprawdź lub zastosuj poprawki z lokalnej strony WWW (VN-07)")
     web_edits.add_argument("project", type=Path)
     web_edits.add_argument("--file", required=True, type=Path, help="Lokalny web-corrections.json z przeglądarki")
@@ -366,6 +371,10 @@ def main(argv: list[str] | None = None) -> int:
         elif args.action == "export":
             for target in export_project(args.project):
                 print(target)
+        elif args.action == "handoff-audit":
+            print(json.dumps(audit_offline_handoff(
+                args.project, args.source, args.patch
+            ), ensure_ascii=False, indent=2))
         elif args.action == "import-web-edits":
             print(json.dumps(import_web_corrections(args.project, args.file, apply=args.apply), ensure_ascii=False, indent=2))
         elif args.action == "mobile-import-check":
