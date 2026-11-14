@@ -246,5 +246,54 @@ class MobileCliTest(unittest.TestCase):
         self.assertNotIn("Traceback", error)
 
 
+    def test_changed_draft_during_patch_publication_fails_without_partial_output(self):
+        import os
+        import videonotes.cli as module
+
+        original_publish = module.export_mobile_corrections_file
+        original_draft = self.edits.read_bytes()
+        initial_source = self.source.read_bytes()
+
+        def change_draft_after_validation(*args, **kwargs):
+            # Identical byte count and preserved mtime: file timestamp/size
+            # comparisons cannot substitute for a cryptographic fingerprint.
+            old = self.edits.stat()
+            updated = original_draft.replace(b"PRIVATE_AFTER_72", b"PRIVATE_AFTER_73")
+            self.assertEqual(len(updated), len(original_draft))
+            self.assertNotEqual(updated, original_draft)
+            self.edits.write_bytes(updated)
+            os.utime(self.edits, ns=(old.st_atime_ns, old.st_mtime_ns))
+            return original_publish(*args, **kwargs)
+
+        with patch.object(module, "export_mobile_corrections_file",
+                          side_effect=change_draft_after_validation):
+            code, output, error = self.execute(
+                "mobile-patch-create", "--source", str(self.source),
+                "--edits", str(self.edits), "--output", str(self.patch),
+            )
+        self.assertEqual(code, 2)
+        self.assertFalse(output)
+        self.assertFalse(self.patch.exists())
+        self.assertEqual(self.source.read_bytes(), initial_source)
+        self.assertNotIn("Traceback", error)
+        self.assert_private_output(error)
+        self.assertFalse(any(item.name.startswith(".vn-mobile-patch-")
+                             for item in self.source.parent.iterdir()))
+
+    def test_exact_draft_snapshot_digest_from_same_validated_bytes(self):
+        from videonotes.mobile_import import read_mobile_edit_draft_file
+        edits, digest = read_mobile_edit_draft_file(
+            self.document, self.edits, source_sha256=self.draft["source_sha256"],
+            include_digest=True,
+        )
+        self.assertEqual(edits, self.draft["edits"])
+        self.assertEqual(digest, hashlib.sha256(self.edits.read_bytes()).hexdigest())
+        self.assertEqual(
+            read_mobile_edit_draft_file(self.document, self.edits,
+                                        source_sha256=self.draft["source_sha256"]),
+            edits,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
