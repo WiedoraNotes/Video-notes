@@ -125,17 +125,21 @@ def export_mobile_edit_draft_file(
             "draft_bytes": report["patch_bytes"], "applied": False}
 
 
-def read_mobile_edit_draft_file(document: dict, source: Path, *, source_sha256: str) -> dict[str, str]:
+def read_mobile_edit_draft_file(document: dict, source: Path, *, source_sha256: str,
+                                include_digest: bool = False) -> dict[str, str] | tuple[dict[str, str], str]:
     """Read explicit, private edits for a local offline patch export.
 
     This input is NOT a corrections patch. It binds edited segment IDs to a
     particular source project AND exact export SHA-256, and never uses CLI arguments for private text.
     It cannot update the raw ASR or a desktop project by itself.
+
+    When include_digest=True, return the digest of the SAME stable draft bytes
+    whose edits were validated, for a pre-publication race check.
     """
     canonical = validate_portable_export(document)
     if not isinstance(source_sha256, str) or not _SHA256.fullmatch(source_sha256):
         raise VideoNotesError("Nieprawidłowy SHA-256 źródłowego eksportu.")
-    raw, _ = _read_stable_file(source)
+    raw, draft_sha256 = _read_stable_file(source)
     try:
         draft = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=_unique_keys,
                            parse_constant=_invalid_constant)
@@ -151,4 +155,5 @@ def read_mobile_edit_draft_file(document: dict, source: Path, *, source_sha256: 
     # render_mobile_corrections validates every ID/text before writing a patch.
     from .mobile_corrections import render_mobile_corrections
     render_mobile_corrections(canonical, draft["edits"])
-    return dict(draft["edits"])
+    result = dict(draft["edits"])
+    return (result, draft_sha256) if include_digest else result
