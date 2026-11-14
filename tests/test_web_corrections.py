@@ -172,8 +172,62 @@ class WebCorrectionsTest(unittest.TestCase):
         self.assertFalse((self.project / "edits.json").exists())
         with self.patchfile.open("wb") as output:
             output.truncate(20 * 1024 * 1024 + 1)
-        with self.assertRaisesRegex(VideoNotesError, "20 MB"):
+        with self.assertRaisesRegex(VideoNotesError, "20 MiB"):
             import_web_corrections(self.project, self.patchfile, apply=True)
+
+
+    def test_web_patch_mutated_in_place_during_first_read_is_rejected(self):
+        """Same-length edit between passes must not create edits.json."""
+        self.patch([{
+            "id": "c0000000-s00000", "start_ms": 0, "end_ms": 500,
+            "before": "Zażółć gęślą", "after": "ORIGINAL_EDIT_AAA",
+        }])
+        original = self.patchfile.read_bytes()
+        changed = original.replace(b"ORIGINAL_EDIT_AAA", b"ORIGINAL_EDIT_BBB")
+        self.assertEqual(len(original), len(changed))
+        from videonotes import stable_local_read
+        original_read = stable_local_read.os.read
+        mutated = False
+
+        def concurrent_change(fd, size):
+            nonlocal mutated
+            data = original_read(fd, size)
+            if data and not mutated:
+                mutated = True
+                self.patchfile.write_bytes(changed)
+            return data
+
+        with patch.object(stable_local_read.os, "read", side_effect=concurrent_change):
+            with self.assertRaises(VideoNotesError):
+                import_web_corrections(self.project, self.patchfile, apply=True)
+        self.assertTrue(mutated)
+        self.assertEqual(self.patchfile.read_bytes(), changed)
+        self.assertFalse((self.project / "edits.json").exists())
+
+    def test_symlink_patch_refused_without_modifying_project(self):
+        self.patch()
+        original = self.patchfile.read_bytes()
+        alternate = self.root / "real.json"
+        alternate.write_bytes(original)
+        self.patchfile.unlink()
+        try:
+            self.patchfile.symlink_to(alternate)
+        except (OSError, NotImplementedError):
+            self.skipTest("System does not allow test symlinks")
+        with self.assertRaises(VideoNotesError):
+            import_web_corrections(self.project, self.patchfile, apply=True)
+        self.assertFalse((self.project / "edits.json").exists())
+
+    def test_nonstandard_numeric_patch_json_is_rejected(self):
+        self.patch()
+        content = self.patchfile.read_bytes().replace(
+            b'"start_ms": 0', b'"start_ms": NaN'
+        )
+        self.assertIn(b'NaN', content)
+        self.patchfile.write_bytes(content)
+        with self.assertRaisesRegex(VideoNotesError, "niedozwolon"):
+            import_web_corrections(self.project, self.patchfile, apply=True)
+        self.assertFalse((self.project / "edits.json").exists())
 
 
 if __name__ == "__main__":
