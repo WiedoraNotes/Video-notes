@@ -140,7 +140,7 @@ def _parse_response(payload: bytes, allowed: dict[str, str], limit: int) -> tupl
         doc = json.loads(payload.decode("utf-8").strip(),
                          object_pairs_hook=_unique_model_fields,
                          parse_constant=_reject_model_constant)
-    except (ValueError, UnicodeError) as error:
+    except (ValueError, UnicodeError, RecursionError) as error:
         raise VideoNotesError("Model nie zwrócił ścisłego JSON; nie zapisano niepewnego szkicu.") from error
     if (not isinstance(doc, dict) or set(doc) != {"heading", "claims"}
             or not _safe_text(doc["heading"], 160)
