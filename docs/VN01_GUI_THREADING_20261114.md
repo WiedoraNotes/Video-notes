@@ -27,3 +27,22 @@ i ścieżkę wznawiania. Uruchomienia GitHub Actions na wirtualnym Windows
 i Xvfb Linux nie zastępują odbioru fizycznego Windows z prawdziwym OBS,
 modelami i nagraniami PL/EN. Faza VN-01 pozostaje nieodebrana do czasu
 rzeczywistego testu.
+
+## Odbiór wyniku przy zmianie katalogu w formularzu — 14.11.2026
+
+Parametry zadania są już zamrożone w chwili rozpoczęcia (PR #213).
+Wykryto jednak drugi scenariusz: jeśli podczas działania użytkownik
+wskaże **inny katalog projektu** w interfejsie, dawny kod po otrzymaniu
+zdarzenia `done` bezwarunkowo wykonywał `_load(silent=True)` dla
+nowego katalogu. Mogło to wyglądać jak zakończona transkrypcja
+innego projektu albo zaciemniać informację o prawidłowym wyniku.
+
+Aplikacja przechowuje teraz ścieżkę katalogu aktualnej transkrypcji
+do końcowego zdarzenia. Jeśli pole katalogu zmieni się w trakcie,
+**nie przeładowuje innego projektu**, zachowuje wybór użytkownika
+i wyświetla informację, jak wskazać pierwotny katalog wyniku.
+Jeśli użytkownik nie zmieni katalogu, automatyczny odczyt transkrypcji
+działa jak dotychczas. Dotyczy to także obsługi błędu przetwarzania.
+
+Testy prawdziwego Tk sprawdzają obie ścieżki, ale nadal nie zastępują
+rzeczywistego 2h+ ASR na fizycznym Windows.

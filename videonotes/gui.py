@@ -54,6 +54,7 @@ class VideoNotesWindow:
         self._current_segment_id: str | None = None
         self._selected_original_text: str | None = None
         self._loaded_project_path: Path | None = None
+        self._active_transcription_folder: Path | None = None
         self._build()
         self.root.protocol("WM_DELETE_WINDOW", self._on_app_close)
         self.root.after(100, self._drain)
@@ -200,6 +201,9 @@ class VideoNotesWindow:
             selected_engine = self.engine.get()
             selected_language = self.language.get()
         folder = Path(project_path)
+        # Remember the exact project targeted by this run even if the user
+        # edits the project selector while the background task is running.
+        self._active_transcription_folder = folder.expanduser().resolve()
         self.cancel.clear()
         self.active = True
         self.start_button.configure(state="disabled")
@@ -735,12 +739,37 @@ class VideoNotesWindow:
                     self.progress["value"] = done
                     self.status.set(f"Zapisano {done} z {total} fragmentów. Można wznowić później.")
                 elif kind in {"error", "done"}:
+                    completed_folder = self._active_transcription_folder
+                    self._active_transcription_folder = None
                     self.active = False
                     self.start_button.configure(state="normal")
                     self.resume_button.configure(state="normal")
                     self.cancel_button.configure(state="disabled")
-                    self.status.set(str(data))
-                    self._load(silent=True)
+                    # Never show data from a DIFFERENT project as the result
+                    # of this completed ASR operation. Preserve the newly
+                    # selected folder and let its owner explicitly open it.
+                    selected_folder = self.project.get().strip()
+                    # The same Windows directory can be selected under either
+                    # a canonical long name or an 8.3 short path. Resolve both
+                    # before deciding that the user switched projects.
+                    try:
+                        selected_canonical = (
+                            Path(selected_folder).expanduser().resolve()
+                            if selected_folder else None
+                        )
+                    except (OSError, RuntimeError):
+                        selected_canonical = None
+                    changed = (completed_folder is not None
+                               and selected_canonical != completed_folder)
+                    if changed:
+                        self.status.set(
+                            str(data) + " Zmieniono katalog projektu w trakcie przetwarzania. "
+                            "Wynik pozostaje w katalogu wskazanym przy uruchomieniu. "
+                            "Aby go zobaczyć, wskaż pierwotny katalog i wybierz Otwórz projekt."
+                        )
+                    else:
+                        self.status.set(str(data))
+                        self._load(silent=True)
                     if kind == "error":
                         messagebox.showwarning("Video Notes", str(data))
         except queue.Empty:
