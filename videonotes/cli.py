@@ -10,6 +10,10 @@ from . import __version__
 from .errors import VideoNotesError
 from .exports import edit_segment, export_project
 from .web_corrections import import_web_corrections
+from .mobile_import import (
+    import_portable_file, import_mobile_corrections_file,
+    export_mobile_corrections_file, read_mobile_edit_draft_file,
+)
 from .media import probe
 from .microphone import record_microphone, recording_status, list_microphone_devices, join_finished_recording
 from .audio_diagnostics import analyze_finished_recording
@@ -76,6 +80,15 @@ def parser() -> argparse.ArgumentParser:
     web_edits.add_argument("project", type=Path)
     web_edits.add_argument("--file", required=True, type=Path, help="Lokalny web-corrections.json z przeglądarki")
     web_edits.add_argument("--apply", action="store_true", help="Zapisz do edits.json po pełnej walidacji; domyślnie tylko podgląd")
+    mobile_check = sub.add_parser("mobile-import-check", help="Offline sprawdź eksport transkrypcji, bez wypisywania tekstu")
+    mobile_check.add_argument("source", type=Path)
+    mobile_patch_check = sub.add_parser("mobile-patch-check", help="Sprawdź paczkę poprawek względem lokalnej transkrypcji; bez zapisu")
+    mobile_patch_check.add_argument("--source", required=True, type=Path)
+    mobile_patch_check.add_argument("--file", required=True, type=Path)
+    mobile_patch_create = sub.add_parser("mobile-patch-create", help="Utwórz lokalną paczkę poprawek bez nadpisania")
+    mobile_patch_create.add_argument("--source", required=True, type=Path)
+    mobile_patch_create.add_argument("--edits", required=True, type=Path, help="Prywatny JSON videonotes-mobile-edit-draft-v1")
+    mobile_patch_create.add_argument("--output", required=True, type=Path)
     edit = sub.add_parser("edit", help="Zapisz poprawkę segmentu, zachowując surową transkrypcję")
     edit.add_argument("project", type=Path)
     edit.add_argument("--segment", required=True)
@@ -351,6 +364,32 @@ def main(argv: list[str] | None = None) -> int:
                 print(target)
         elif args.action == "import-web-edits":
             print(json.dumps(import_web_corrections(args.project, args.file, apply=args.apply), ensure_ascii=False, indent=2))
+        elif args.action == "mobile-import-check":
+            source = import_portable_file(args.source)
+            doc = source["document"]
+            print(json.dumps({
+                "schema": doc["schema"], "language": doc["language"],
+                "complete": doc["complete"], "segments": len(doc["segments"]),
+                "source_sha256": source["source_sha256"],
+                "source_bytes": source["source_bytes"], "read_only": True,
+            }, ensure_ascii=False))
+        elif args.action == "mobile-patch-check":
+            doc = import_portable_file(args.source)["document"]
+            preview = import_mobile_corrections_file(doc, args.file)
+            print(json.dumps({
+                "schema": "videonotes-web-corrections-v1",
+                "changes": len(preview["changes"]),
+                "patch_sha256": preview["source_sha256"],
+                "patch_bytes": preview["source_bytes"], "read_only": True,
+            }, ensure_ascii=False))
+        elif args.action == "mobile-patch-create":
+            doc = import_portable_file(args.source)["document"]
+            edits = read_mobile_edit_draft_file(doc, args.edits)
+            report = export_mobile_corrections_file(doc, edits, args.output)
+            print(json.dumps({
+                "schema": "videonotes-web-corrections-v1",
+                "submitted_edits": len(edits), **report,
+            }, ensure_ascii=False))
         elif args.action == "status":
             project, transcript, edits = read_project(args.project)
             total = (project["source"]["duration_ms"] + project["processing"]["chunk_ms"] - 1) // project["processing"]["chunk_ms"]

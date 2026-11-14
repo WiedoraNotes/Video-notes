@@ -76,6 +76,45 @@ i symulację równoległego utworzenia pliku. Nie jest to test fizycznego
 urządzenia, aktualizacji mobilnego pliku przez system Android/iOS ani
 gwarancja trwałości na nagły zanik zasilania.
 
+## Narzędzia wiersza poleceń — lokalna wymiana bez Pythona użytkownika
+
+Poniższe polecenia działają wyłącznie na plikach lokalnych, bez mikrofonu,
+chmury ani instalacji Android/iOS. Wynik w terminalu zawiera tylko liczbę
+segmentów/poprawek i SHA-256, **bez wypowiedzianych słów i identyfikatora projektu**.
+
+~~~powershell
+python -m videonotes mobile-import-check "C:\KWN\exports\transcript.json"
+python -m videonotes mobile-patch-create --source "C:\KWN\exports\transcript.json" --edits "C:\KWN\prywatne\moje-edits.json" --output "C:\KWN\prywatne\poprawki-nowe.json"
+python -m videonotes mobile-patch-check --source "C:\KWN\exports\transcript.json" --file "C:\KWN\prywatne\poprawki-nowe.json"
+~~~
+
+Plik `moje-edits.json` należy przygotować lokalnie według schematu (tutaj
+wyłącznie fikcyjny przykład; `project_id` i `id` muszą odpowiadać oryginałowi):
+
+~~~json
+{
+  "schema": "videonotes-mobile-edit-draft-v1",
+  "project_id": "projekt-testowy",
+  "edits": {
+    "s0": "Poprawiony fragment transkrypcji"
+  }
+}
+~~~
+
+Tekst poprawek przechowywany jest **wyłącznie w pliku**, nigdy w argumentach
+procesu ani standardowym raporcie JSON. Parser odrzuca zduplikowane pola
+(łącznie z identyfikatorami poprawek), niewłaściwy projekt, zbyt długie teksty,
+symlinki, dane większe niż 20 MiB oraz zmiany plików podczas odczytu.
+Eksport tworzy **nowy** plik i nie nadpisuje starego. Podgląd nie zatwierdza
+zmian. Późniejsze zastosowanie do projektu desktopowego wymaga osobnej,
+świadomej operacji `import-web-edits --apply` z ponowną walidacją.
+Nie przesyłać `moje-edits.json` ani plików z poprawkami do GitHuba.
+
+**Granica odbioru:** narzędzie CLI i testy CI to wyłącznie kontrakt
+plikowy na Windows/Linux; nie jest jeszcze aplikacją Android/iOS ani
+testem fizycznego urządzenia. `VN-08-01` oraz `MOB-01` pozostają
+przedmiotem decyzji właściciela i późniejszego odbioru.
+
 ## Testy automatyczne
 
 ~~~sh
