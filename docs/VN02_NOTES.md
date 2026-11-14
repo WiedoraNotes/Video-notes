@@ -106,3 +106,26 @@ Podczas opcjonalnej konwersji notatki podstawowej do PDF w lokalnym LibreOffice 
 ## Niezmienność notatek podczas eksportu TXT/Markdown/DOCX (12.11.2026)
 
 Podstawowe notatki mają trzy dodatkowo chronione wyjścia: TXT, Markdown i DOCX. Przed renderowaniem aplikacja odczytuje i weryfikuje pełną notatkę z ręcznymi poprawkami, a tuż po wygenerowaniu formatu **ponownie porównuje ten sam stan notatki**. Równoległa edycja powoduje odmowę zapisania przestarzałego dokumentu i zachowuje poprzedni plik. Trzy testy symulują zmianę punktu notatki podczas renderowania każdego z formatów, czwarty potwierdza zwykły eksport. Jest to dodatkowa kontrola spójności, a nie globalna blokada plików przed dowolnymi zewnętrznymi procesami; formalny odbiór Windows Word pozostaje osobnym warunkiem.
+
+## Oddzielny sukces edycji i nieudany eksport w GUI — 14.11.2026
+
+Ręczna poprawka zapisuje się najpierw atomowo do `edits.json`.
+Generowanie czterech plików `exports/transcript.*` to następna,
+odrębna operacja. Wcześniej błąd podczas eksportu powodował, że
+interfejs pokazywał jeden ogólny błąd, chociaż poprawka była już
+**trwale zapisana**. Użytkownik mógł ponowić zapis ze starym tokenem
+wersji i uzyskać pozorny konflikt z własną zmianą.
+
+Interfejs teraz rozdziela te dwa wyniki:
+jeżeli zapis `edits.json` się nie uda, szkic pozostaje w edytorze
+i pliki eksportu nie są uruchamiane. Jeżeli poprawka się powiedzie,
+lecz eksport zawiedzie (np. brak miejsca lub zablokowany plik), GUI
+jednoznacznie potwierdza zapis poprawki, odświeża widok i ostrzega,
+że poprzednie pliki TXT/SRT/VTT/JSON mogą być nieaktualne. Powtórne
+zapisanie tej samej poprawki nie jest konieczne.
+
+Testy z prawdziwymi widgetami Tk sprawdzają dwa scenariusze
+symulowanego błędu i ponowną poprawkę po błędnym eksporcie.
+Wynik GitHub Actions nie jest testem fizycznego pełnego dysku ani
+Word/LibreOffice na komputerze użytkownika. VN-02 pozostaje
+nieodebrane merytorycznie i sprzętowo.
