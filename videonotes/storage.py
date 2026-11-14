@@ -164,7 +164,7 @@ def load_json(path: Path) -> Any:
             raise VideoNotesError("Plik projektu zmienił się lub urósł podczas odczytu.")
         return json.loads(content.decode("utf-8"), object_pairs_hook=_unique_json_keys,
                           parse_constant=_invalid_json_constant)
-    except (UnicodeError, json.JSONDecodeError, OSError) as error:
+    except (UnicodeError, ValueError, RecursionError, OSError) as error:
         raise VideoNotesError("Nie można odczytać pliku projektu lub plik jest uszkodzony.") from error
 
 
