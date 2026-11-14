@@ -561,7 +561,7 @@ class GuiNotesHeadlessTest(unittest.TestCase):
         self.gui.edit_text.delete("1.0", "end")
         self.gui.edit_text.insert("1.0", correction)
         with patch("videonotes.gui.export_project",
-                   side_effect=VideoNotesError("symulowany brak miejsca")) as export, \\
+                   side_effect=VideoNotesError("symulowany brak miejsca")) as export, \
              patch("videonotes.gui.messagebox.showwarning") as warning, \
              patch("videonotes.gui.messagebox.showerror") as error:
             self.gui._save_edit()
@@ -597,9 +597,9 @@ class GuiNotesHeadlessTest(unittest.TestCase):
         self.gui._selected()
         self.gui.edit_text.delete("1.0", "end")
         self.gui.edit_text.insert("1.0", "NIEZAPISANA PO BLEDZIE DYSKU")
-        with patch("videonotes.gui.edit_segment", side_effect=OSError("simulated disk full")), \\
-             patch("videonotes.gui.export_project") as export, \\
-             patch("videonotes.gui.messagebox.showerror") as error, \\
+        with patch("videonotes.gui.edit_segment", side_effect=OSError("simulated disk full")), \
+             patch("videonotes.gui.export_project") as export, \
+             patch("videonotes.gui.messagebox.showerror") as error, \
              patch("videonotes.gui.messagebox.showwarning") as warning:
             self.gui._save_edit()
             export.assert_not_called()
