@@ -5,7 +5,6 @@ never interpreted as a replacement for raw ASR, the full transcript or notes.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from pathlib import Path
@@ -13,6 +12,7 @@ from pathlib import Path
 from .contracts import MAX_TEXT_LENGTH
 from .errors import VideoNotesError
 from .storage import read_project, save_json
+from .stable_local_read import read_stable_local_json
 from .edit_lock import transcript_edit_lock
 
 PATCH_SCHEMA = "videonotes-web-corrections-v1"
@@ -35,19 +35,25 @@ def _unique_object(pairs: list[tuple[str, object]]) -> dict:
     return result
 
 
+def _invalid_patch_constant(_value: str) -> None:
+    raise VideoNotesError("Plik poprawek zawiera niedozwoloną liczbę JSON.")
+
+
 def _load_patch(path: Path) -> tuple[dict, str]:
-    """Bound raw bytes even if a file grows after the initial stat call."""
+    """Read through one file handle twice, rejecting in-place/path swaps.
+
+    The SHA-256 is computed on the *same* validated bytes parsed as JSON.
+    Unlike an ordinary path.read_bytes(), a same-size overwrite on Windows
+    with coarse timestamps is also caught before applying any edit.
+    """
     try:
-        if path.is_symlink() or not path.is_file():
-            raise VideoNotesError("Wymagany jest zwykły, lokalny plik poprawek WWW.")
-        with path.open("rb") as reader:
-            raw = reader.read(MAX_PATCH_BYTES + 1)
-        if len(raw) > MAX_PATCH_BYTES:
-            raise VideoNotesError("Plik poprawek WWW przekracza limit 20 MB.")
-        data = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=_unique_object)
+        raw, digest = read_stable_local_json(path)
+        data = json.loads(raw.decode("utf-8-sig"),
+                          object_pairs_hook=_unique_object,
+                          parse_constant=_invalid_patch_constant)
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise VideoNotesError("Nie można odczytać poprawnego pliku poprawek WWW.") from error
-    return data, hashlib.sha256(raw).hexdigest()
+    return data, digest
 
 
 def import_web_corrections(folder: Path, patch_file: Path, *, apply: bool = False) -> dict:

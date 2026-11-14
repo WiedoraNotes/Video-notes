@@ -31,3 +31,19 @@ Można teraz wczytać poprzednio pobraną paczkę `web-corrections.json` bezpoś
 ## Spójność importu poprawek z przeglądarki (12.11.2026)
 
 Import poprawek WWW odrzuca niejednoznaczny JSON z powielonymi nazwami pól, w tym zduplikowanymi `before` lub `after` w pojedynczej edycji. Odczyt jest ograniczony do 20 MB **także wtedy, gdy plik zwiększy rozmiar po pierwszym sprawdzeniu**. Przed zatwierdzeniem zmian aplikacja ponownie sprawdza pełny projekt (nie tylko ID), transkrypcję, poprzednie poprawki i SHA-256 pliku importu. Jeśli użytkownik lub inny proces zmienił plik przeglądarkowy albo ustawienia projektu między kontrolami, operacja nie zapisuje żadnej poprawki. Testy syntetycznie wymuszają duplikat klucza JSON, podmianę zawartości importu i zmianę języka projektu. Nie jest to globalna blokada zapisu dla zewnętrznych procesów, ale importer respektuje wspólną blokadę edycji aplikacji.
+
+## Stabilny odczyt pliku poprawek przed zastosowaniem (14.11.2026)
+
+Importer WWW i przenośny adapter korzystają ze wspólnego, ograniczonego odczytu
+`videonotes/stable_local_read.py`. Plik jest otwierany jako zwykły plik, bez
+podążania za bezpośrednim symlinkiem, i odczytywany z jednego deskryptora
+**dwukrotnie**, z porównaniem SHA-256, rozmiaru, metadanych oraz tożsamości
+ścieżki. Umożliwia to odrzucenie również nadpisania treści przy zachowaniu
+wielkości pliku i słabo rozdzielczych znacznikach czasu Windows. JSON nie może
+zawierać `NaN`, `Infinity` ani powielonych pól. Limit 20 MiB obowiązuje
+rzeczywisty odczyt, a nie tylko wstępną informację z systemu plików.
+
+Przed publikacją `edits.json` importer nadal ponownie sprawdza aktualny stan
+projektu, konflikty oraz SHA-256 paczki i zachowuje oryginalną transkrypcję.
+Są to testy bezpieczeństwa odczytu na CI, **nie** fizyczny odbiór Windows,
+NVDA ani gwarancja atomowości przy zanikach zasilania.
