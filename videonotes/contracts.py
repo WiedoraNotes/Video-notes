@@ -27,7 +27,7 @@ def valid_unicode_text(value: object) -> bool:
     export, which would modify the user's words without consent.
     Astral Unicode characters (emoji, historic scripts) are allowed.
     """
-    return (isinstance(value, str) and "\\x00" not in value
+    return (isinstance(value, str) and "\x00" not in value
             and all(not 0xD800 <= ord(char) <= 0xDFFF for char in value))
 
 
