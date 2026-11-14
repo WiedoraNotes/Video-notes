@@ -186,3 +186,31 @@ brak plików tymczasowych. Jest to ochrona przed kolizją w trakcie
 uruchomienia, nie atomowa blokada pliku przed obcym zapisem po wyjściu.
 
 Nie zastępuje to odbioru aplikacji Android/iOS na prawdziwych urządzeniach.
+
+## Podgląd szkicu i obustronna kontrola plików wejściowych (14.11.2026)
+
+Przed utworzeniem docelowej paczki można bezpiecznie sprawdzić
+sam lokalny szkic (bez zmiany transkrypcji, szkicu lub projektu):
+
+~~~powershell
+python -m videonotes mobile-draft-check --source "C:\KWN\exports\transcript.json" --edits "C:\KWN\prywatne\moje-edits.json"
+~~~
+
+Raport podaje liczbę segmentów, wprowadzonych zmian, poprawek
+identycznych ze źródłem i SHA źródła. Nie drukuje tekstu
+wypowiedzi, treści poprawek, identyfikatora projektu ani
+fingerprintu prywatnego szkicu. Sprawdza zgodność projektu,
+dokładnego źródłowego SHA-256, schematu, identyfikatorów,
+rozmiaru i zawartości zmian oraz limit 20 MiB wynikowej paczki.
+Na koniec ponownie odczytuje **oba** pliki wejściowe i
+odmawia potwierdzenia, jeśli którykolwiek z nich został
+zmieniony podczas walidacji.
+
+`mobile-patch-check` analogicznie porównuje teraz SHA paczki
+także **po** weryfikacji transkrypcji źródłowej. Dzięki temu
+zmiana pliku `web-corrections.json` już po pierwszym
+podglądzie nie generuje fałszywego sukcesu. Oba polecenia
+pozostają wyłącznie odczytowe. Dają weryfikację w chwili testu,
+ale nie blokują obcych procesów po zakończeniu polecenia.
+Prawdziwe urządzenia Android/iOS i odbiór VN-08 nie zostały
+tu przetestowane.
