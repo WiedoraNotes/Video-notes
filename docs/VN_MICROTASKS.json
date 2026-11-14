@@ -92,9 +92,10 @@
       "depends_on": [
         "VN-00-01"
       ],
-      "acceptance_note": " PR #213: Tkinter GUI transcribe/start/resume captures source, model, CLI, language and audio track on main thread; worker does not read Tk variables, UI changes cannot alter in-flight parameters. Hosted real Tk Xvfb/Windows checks on source PR; NOT a real OBS ASR or physical Windows acceptance.",
+      "acceptance_note": " PR #213: Tkinter GUI transcribe/start/resume captures source, model, CLI, language and audio track on main thread; worker does not read Tk variables, UI changes cannot alter in-flight parameters. Hosted real Tk Xvfb/Windows checks on source PR; NOT a real OBS ASR or physical Windows acceptance. PR #215: przy zakończeniu asynchronicznej transkrypcji GUI nie ładuje innego katalogu wskazanego w formularzu; porównuje kanoniczne ścieżki Windows 8.3/pełne, zachowuje zmianę wyboru i informuje gdzie odczytać wynik. Syntetyczne testy prawdziwych widgetów Tk, bez realnego OBS i fizycznego Windows.",
       "evidence_refs": [
-        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/213"
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/213",
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/215"
       ]
     },
     {
@@ -132,9 +133,10 @@
       "depends_on": [
         "VN-00-04"
       ],
-      "acceptance_note": " PR #213: Tkinter GUI transcribe/start/resume captures source, model, CLI, language and audio track on main thread; worker does not read Tk variables, UI changes cannot alter in-flight parameters. Hosted real Tk Xvfb/Windows checks on source PR; NOT a real OBS ASR or physical Windows acceptance.",
+      "acceptance_note": " PR #213: Tkinter GUI transcribe/start/resume captures source, model, CLI, language and audio track on main thread; worker does not read Tk variables, UI changes cannot alter in-flight parameters. Hosted real Tk Xvfb/Windows checks on source PR; NOT a real OBS ASR or physical Windows acceptance. PR #215: przy zakończeniu asynchronicznej transkrypcji GUI nie ładuje innego katalogu wskazanego w formularzu; porównuje kanoniczne ścieżki Windows 8.3/pełne, zachowuje zmianę wyboru i informuje gdzie odczytać wynik. Syntetyczne testy prawdziwych widgetów Tk, bez realnego OBS i fizycznego Windows.",
       "evidence_refs": [
-        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/213"
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/213",
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/215"
       ]
     },
     {
