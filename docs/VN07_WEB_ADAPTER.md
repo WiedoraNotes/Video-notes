@@ -87,3 +87,20 @@ Po wdrożeniu nawigacji z czasu odtwarzacza wykryto dodatkową ścieżkę utraty
 ## Odrzucenie niejednoznacznego JSON na granicy WWW (12.11.2026)
 
 Importer przeglądarkowy w `web/transcript-core.js` sprawdza teraz duplikaty kluczy JSON, nie tylko identyfikatory segmentów. Standardowe `JSON.parse` zachowuje ostatnią wartość powielonego pola, przez co paczka z dwoma `after` lub `text` mogła być interpretowana inaczej niż importer Python (który odrzuca duplikaty). Dodatkowy liniowy skan po walidacji składni JSON identyfikuje powtórzenia także wtedy, gdy nazwa jest zakodowana jako `\uXXXX`, odrzucając całą paczkę bez częściowych zmian. Testy sprawdzają powielone klucze w obiektach głównych i zagnieżdżonych, formy Unicode oraz zwykły tekst zawierający nawiasy i dwukropki. Zmiana jest wdrożona **najpierw w repozytorium źródłowym** Video-notes; opublikowana beta Wiedora pozostaje przypięta do poprzedniego, stabilnego bloba JS, dopóki nowy blob nie przejdzie CI i odrębnego zbiorczego wydania KWN.
+
+## Weryfikacja bajtów UTF-8 przed importem (14.11.2026)
+
+Przeglądarka odczytuje lokalną transkrypcję i paczki poprawek przez
+`File.arrayBuffer()` oraz dekoder `TextDecoder("utf-8", {fatal: true})`.
+Wcześniejsze `File.text()` zamieniało uszkodzone sekwencje UTF-8 na znak
+zastępczy U+FFFD. Mogło to niepostrzeżenie zmienić słowa transkrypcji i
+zostać uznane za prawidłowe dane. Teraz nieprawidłowe bajty przerywają
+cały import bez naruszenia poprzedniego dokumentu, edycji ani źródłowych
+plików. Poprawnie zakodowany dosłowny znak U+FFFD oraz UTF-8 z BOM są
+nadal obsługiwane. Po odebraniu bajtów ponownie kontrolowany jest limit
+20 MiB, niezależnie od deklarowanego `File.size`.
+
+Regresje obejmują oba kierunki importu, polskie znaki i Unicode,
+rzeczywistą przeglądarkę Chromium w CI oraz niezapisywanie prywatnego
+tekstu. Nie oznacza to ręcznego odbioru czytnika ekranu, fizycznego
+Windows, pełnej dostępności ani regresji hosta Wiedora.
