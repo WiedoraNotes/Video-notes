@@ -51,7 +51,7 @@ def _load_patch(path: Path) -> tuple[dict, str]:
         data = json.loads(raw.decode("utf-8-sig"),
                           object_pairs_hook=_unique_object,
                           parse_constant=_invalid_patch_constant)
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+    except (OSError, UnicodeError, ValueError, RecursionError) as error:
         raise VideoNotesError("Nie można odczytać poprawnego pliku poprawek WWW.") from error
     return data, digest
 

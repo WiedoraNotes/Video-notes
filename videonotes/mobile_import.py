@@ -139,7 +139,7 @@ def read_mobile_edit_draft_file(document: dict, source: Path, *, source_sha256: 
     try:
         draft = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=_unique_keys,
                            parse_constant=_invalid_constant)
-    except (UnicodeError, json.JSONDecodeError) as error:
+    except (UnicodeError, ValueError, RecursionError) as error:
         raise VideoNotesError("Niepoprawny JSON lokalnego szkicu poprawek.") from error
     if (not isinstance(draft, dict)
             or set(draft) != {"schema", "project_id", "source_sha256", "edits"}
