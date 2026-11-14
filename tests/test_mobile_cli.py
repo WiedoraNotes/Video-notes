@@ -320,5 +320,113 @@ class MobileCliTest(unittest.TestCase):
         )
 
 
+    def test_mobile_draft_check_reports_only_counts_without_writing_files(self):
+        raw_source = self.source.read_bytes()
+        raw_draft = self.edits.read_bytes()
+        status, out, err = self.execute(
+            "mobile-draft-check", "--source", str(self.source),
+            "--edits", str(self.edits),
+        )
+        self.assertEqual(status, 0, err)
+        report = json.loads(out)
+        self.assertEqual(report["schema"], "videonotes-mobile-edit-draft-v2")
+        self.assertEqual(report["segments"], 2)
+        self.assertEqual(report["submitted_edits"], 1)
+        self.assertEqual(report["actual_changes"], 1)
+        self.assertEqual(report["unchanged_edits"], 0)
+        self.assertTrue(report["read_only"])
+        self.assert_private_output(out)
+        self.assertEqual(err, "")
+        self.assertFalse(self.patch.exists())
+        self.assertEqual(self.source.read_bytes(), raw_source)
+        self.assertEqual(self.edits.read_bytes(), raw_draft)
+
+        self.draft["edits"]["s1"] = self.document["segments"][1]["text"]
+        self.write_draft()
+        status, out, err = self.execute(
+            "mobile-draft-check", "--source", str(self.source),
+            "--edits", str(self.edits),
+        )
+        self.assertEqual(status, 0, err)
+        self.assertEqual(json.loads(out)["unchanged_edits"], 1)
+        self.assertEqual(json.loads(out)["actual_changes"], 1)
+
+    def test_mobile_draft_check_rejects_stale_or_duplicate_edits(self):
+        self.draft["source_sha256"] = "0" * 64
+        self.write_draft()
+        status, out, err = self.execute(
+            "mobile-draft-check", "--source", str(self.source),
+            "--edits", str(self.edits),
+        )
+        self.assertEqual(status, 2)
+        self.assertFalse(out)
+        self.assert_private_output(err)
+        self.assertFalse(self.patch.exists())
+        self.draft["source_sha256"] = hashlib.sha256(self.source.read_bytes()).hexdigest()
+        self.write_draft()
+        corrupt = self.edits.read_bytes().replace(b'"s0":', b'"s0":"another","s0":')
+        self.edits.write_bytes(corrupt)
+        status, out, err = self.execute(
+            "mobile-draft-check", "--source", str(self.source),
+            "--edits", str(self.edits),
+        )
+        self.assertEqual(status, 2)
+        self.assertFalse(out)
+        self.assertNotIn("Traceback", err)
+
+    def test_mobile_draft_check_detects_mutation_after_validation(self):
+        import videonotes.cli as module
+        original = module.read_mobile_edit_draft_file
+
+        def mutate_after_read(*args, **kwargs):
+            data = original(*args, **kwargs)
+            self.edits.write_bytes(self.edits.read_bytes().replace(
+                b"PRIVATE_AFTER_72", b"PRIVATE_AFTER_73"
+            ))
+            return data
+
+        with patch.object(module, "read_mobile_edit_draft_file",
+                          side_effect=mutate_after_read):
+            status, out, err = self.execute(
+                "mobile-draft-check", "--source", str(self.source),
+                "--edits", str(self.edits),
+            )
+        self.assertEqual(status, 2)
+        self.assertFalse(out)
+        self.assertFalse(self.patch.exists())
+        self.assert_private_output(err)
+
+    def test_mobile_patch_check_rejects_changed_patch_after_first_preview(self):
+        import videonotes.cli as module
+        status, out, err = self.execute(
+            "mobile-patch-create", "--source", str(self.source),
+            "--edits", str(self.edits), "--output", str(self.patch),
+        )
+        self.assertEqual(status, 0, err)
+        original = module.import_mobile_corrections_file
+        source_before = self.source.read_bytes()
+
+        def swap_patch_after_preview(*args, **kwargs):
+            preview = original(*args, **kwargs)
+            contents = self.patch.read_bytes()
+            replacement = contents.replace(b"PRIVATE_AFTER_72", b"PRIVATE_AFTER_73")
+            self.assertEqual(len(replacement), len(contents))
+            self.patch.write_bytes(replacement)
+            return preview
+
+        with patch.object(module, "import_mobile_corrections_file",
+                          side_effect=swap_patch_after_preview):
+            status, out, err = self.execute(
+                "mobile-patch-check", "--source", str(self.source),
+                "--file", str(self.patch),
+            )
+        self.assertEqual(status, 2)
+        self.assertFalse(out)
+        self.assertNotIn("Traceback", err)
+        self.assert_private_output(err)
+        self.assertEqual(self.source.read_bytes(), source_before)
+
+
+
 if __name__ == "__main__":
     unittest.main()
