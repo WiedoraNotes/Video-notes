@@ -12,6 +12,9 @@ import tempfile
 import tkinter as tk
 import unittest
 from pathlib import Path
+from contextlib import ExitStack
+import threading
+import time
 from tkinter import ttk
 from unittest.mock import patch
 
@@ -56,6 +59,113 @@ class GuiNotesHeadlessTest(unittest.TestCase):
         self.assertEqual(len(matches), 1, f"Expected precisely one button {label!r}")
         return matches[0]
 
+
+    def test_transcribe_worker_uses_immutable_main_thread_tk_snapshot(self):
+        """Real Tk widgets: no worker .get() or changing audio-stream selection."""
+        self.gui.source.set(str(self.folder / "original-source.mp4"))
+        self.gui.model.set(str(self.folder / "original-model.bin"))
+        self.gui.engine.set("whisper-original.exe")
+        self.gui.language.set("en")
+        label = "5: original audio"
+        self.gui.streams = {label: 5}
+        self.gui.stream.set(label)
+        expected = {
+            "source": Path(self.gui.source.get()),
+            "project": self.folder,
+            "model": Path(self.gui.model.get()),
+            "engine": self.gui.engine.get(),
+            "stream": 5,
+            "language": "en",
+        }
+        started = threading.Event()
+        release = threading.Event()
+        calls = []
+
+        def create_stub(source, folder, *, model, whisper_cli, stream, language):
+            calls.append({
+                "source": source, "project": folder, "model": model,
+                "engine": whisper_cli, "stream": stream, "language": language,
+            })
+            started.set()
+            if not release.wait(timeout=4):
+                raise AssertionError("Test worker should have been released")
+
+        def guarded_get(original):
+            def get():
+                if threading.current_thread() is not threading.main_thread():
+                    raise AssertionError("Tk variable read from ASR worker")
+                return original()
+            return get
+
+        try:
+            with ExitStack() as stack:
+                for name in ("project", "source", "model", "stream", "engine", "language"):
+                    value = getattr(self.gui, name)
+                    stack.enter_context(patch.object(value, "get", side_effect=guarded_get(value.get)))
+                create = stack.enter_context(patch("videonotes.gui.create_project", side_effect=create_stub))
+                transcribe = stack.enter_context(patch("videonotes.gui.transcribe_project", return_value={}))
+                export = stack.enter_context(patch("videonotes.gui.export_project", return_value=[]))
+                warning = stack.enter_context(patch("videonotes.gui.messagebox.showwarning"))
+                self.gui._work(resume=False)
+                self.assertTrue(started.wait(timeout=4), "ASR worker did not begin with snapshotted settings")
+                self.assertTrue(self.gui.active)
+                # The GUI is still editable while the worker processes. This
+                # must not change the in-flight source/model/audio track.
+                self.gui.source.set("different-source.mkv")
+                self.gui.model.set("different-model.bin")
+                self.gui.engine.set("another-cli")
+                self.gui.language.set("pl")
+                self.gui.streams.clear()
+                self.gui.stream.set("changed track")
+                self.gui.project.set(str(self.folder / "another-project"))
+                release.set()
+                for _ in range(200):
+                    self.root.update()
+                    if not self.gui.active:
+                        break
+                    time.sleep(0.015)
+                self.assertFalse(self.gui.active)
+                self.assertEqual(calls, [expected])
+                create.assert_called_once()
+                transcribe.assert_called_once()
+                self.assertEqual(transcribe.call_args.args[0], self.folder)
+                export.assert_called_once_with(self.folder)
+                warning.assert_not_called()
+        finally:
+            release.set()
+
+    def test_resume_does_not_read_unused_tk_source_settings_in_worker(self):
+        """Resume requires only the chosen project path, not mutable form state."""
+        self.gui.source.set("")
+        self.gui.model.set("")
+        self.gui.stream.set("")
+        self.gui.streams.clear()
+
+        def guard_unused(name):
+            def fail():
+                raise AssertionError("Unused Tk parameter read during resume: " + name)
+            return fail
+
+        with ExitStack() as stack:
+            for name in ("source", "model", "engine", "language", "stream"):
+                stack.enter_context(patch.object(
+                    getattr(self.gui, name), "get", side_effect=guard_unused(name)
+                ))
+            created = stack.enter_context(patch("videonotes.gui.create_project"))
+            transcribed = stack.enter_context(patch("videonotes.gui.transcribe_project", return_value={}))
+            exported = stack.enter_context(patch("videonotes.gui.export_project", return_value=[]))
+            warning = stack.enter_context(patch("videonotes.gui.messagebox.showwarning"))
+            self.gui._work(resume=True)
+            for _ in range(200):
+                self.root.update()
+                if not self.gui.active:
+                    break
+                time.sleep(0.015)
+            self.assertFalse(self.gui.active)
+            created.assert_not_called()
+            transcribed.assert_called_once()
+            exported.assert_called_once_with(self.folder)
+            warning.assert_not_called()
 
     def test_optional_local_analysis_dialog_exposes_controls_without_auto_processing(self):
         with patch("videonotes.gui.extract_slide_ocr") as ocr, \
