@@ -190,6 +190,9 @@ class GuiNotesHeadlessTest(unittest.TestCase):
              patch.object(self.gui, "_load", wraps=self.gui._load) as reload, \
              patch("videonotes.gui.messagebox.showwarning") as warning:
             self.gui._work(resume=False)
+            # On Windows TEMP can be represented by an 8.3 short name while
+            # the file chooser returns the identical canonical long name.
+            self.gui.project.set(str(self.folder.resolve()))
             for _ in range(200):
                 self.root.update()
                 if not self.gui.active:
