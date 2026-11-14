@@ -8,15 +8,17 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import tempfile
 from pathlib import Path
+from collections.abc import Callable
 
 from .errors import VideoNotesError
 from .mobile_contract import (
     _invalid_constant, _unique_keys,
     parse_portable_export, validate_portable_export,
 )
-from .stable_local_read import read_stable_local_json as _read_stable_file
+from .stable_local_read import MAX_JSON_BYTES, read_stable_local_json as _read_stable_file
 
 
 def import_portable_file(source: Path) -> dict:
@@ -42,18 +44,11 @@ def import_mobile_corrections_file(document: dict, source: Path) -> dict:
             "source_bytes": len(raw), "read_only": True}
 
 
-def export_mobile_corrections_file(document: dict, edits: dict[str, str],
-                                   destination: Path) -> dict:
-    """Publish a local corrections JSON without replacing any existing file.
-
-    Stage and fsync under a private temporary directory on the same volume,
-    then create the final path by hard link (atomic no-clobber). If the
-    filesystem cannot create a hard link, refuse rather than leave an
-    incomplete/partially visible patch. No project data is applied or uploaded.
-    """
-    from .mobile_corrections import render_mobile_corrections
-
-    payload = render_mobile_corrections(document, edits)
+def _publish_private_json(payload: bytes, destination: Path, *,
+                          verify_source: Callable[[], bool] | None = None) -> dict:
+    """Atomically create a *new* local JSON; never replace user files."""
+    if not isinstance(payload, bytes) or len(payload) > MAX_JSON_BYTES:
+        raise VideoNotesError("Plik eksportu przekracza 20 MiB.")
     target = Path(destination).expanduser().absolute()
     if target.suffix.lower() != ".json":
         raise VideoNotesError("Wybierz docelowy plik poprawek .json.")
@@ -67,11 +62,16 @@ def export_mobile_corrections_file(document: dict, edits: dict[str, str],
         raise VideoNotesError("Plik poprawek już istnieje; nie nadpisuję go.")
     try:
         with tempfile.TemporaryDirectory(prefix=".vn-mobile-patch-", dir=parent) as temp:
-            stage = Path(temp) / "corrections.json"
+            stage = Path(temp) / "document.json"
             with stage.open("xb") as writer:
                 writer.write(payload)
                 writer.flush()
                 os.fsync(writer.fileno())
+            # Re-read the original file after staging to prevent a draft from
+            # silently binding to a transcript changed while writing.
+            # This is best effort against external writers, not an OS lock.
+            if verify_source is not None and verify_source() is not True:
+                raise VideoNotesError("Transkrypcja źródłowa zmieniła się; nie zapisano pliku.")
             try:
                 os.link(stage, target)
             except FileExistsError as error:
@@ -86,17 +86,52 @@ def export_mobile_corrections_file(document: dict, edits: dict[str, str],
             "patch_bytes": len(payload), "applied": False}
 
 
-MOBILE_EDIT_DRAFT_SCHEMA = "videonotes-mobile-edit-draft-v1"
+def export_mobile_corrections_file(
+    document: dict, edits: dict[str, str], destination: Path, *,
+    verify_source: Callable[[], bool] | None = None,
+) -> dict:
+    """Publish validated mobile/browser corrections without overwriting."""
+    from .mobile_corrections import render_mobile_corrections
+
+    payload = render_mobile_corrections(document, edits)
+    return _publish_private_json(payload, destination, verify_source=verify_source)
 
 
-def read_mobile_edit_draft_file(document: dict, source: Path) -> dict[str, str]:
+MOBILE_EDIT_DRAFT_SCHEMA = "videonotes-mobile-edit-draft-v2"
+_SHA256 = re.compile(r"[a-f0-9]{64}\\Z", re.ASCII)
+
+
+def export_mobile_edit_draft_file(
+    document: dict, source_sha256: str, destination: Path, *,
+    verify_source: Callable[[], bool] | None = None,
+) -> dict:
+    """Create an editable template bound to exact transcript export bytes.
+
+    It contains no ASR text or edits; private project ID and SHA stay on disk.
+    Existing paths are never overwritten and no project data are changed.
+    """
+    canonical = validate_portable_export(document)
+    if not isinstance(source_sha256, str) or not _SHA256.fullmatch(source_sha256):
+        raise VideoNotesError("Nieprawidłowy SHA-256 źródłowego eksportu.")
+    payload = (json.dumps({
+        "schema": MOBILE_EDIT_DRAFT_SCHEMA,
+        "project_id": canonical["project_id"],
+        "source_sha256": source_sha256,
+        "edits": {},
+    }, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
+    return _publish_private_json(payload, destination, verify_source=verify_source)
+
+
+def read_mobile_edit_draft_file(document: dict, source: Path, *, source_sha256: str) -> dict[str, str]:
     """Read explicit, private edits for a local offline patch export.
 
     This input is NOT a corrections patch. It binds edited segment IDs to a
-    particular source project, and never uses CLI arguments for private text.
+    particular source project AND exact export SHA-256, and never uses CLI arguments for private text.
     It cannot update the raw ASR or a desktop project by itself.
     """
     canonical = validate_portable_export(document)
+    if not isinstance(source_sha256, str) or not _SHA256.fullmatch(source_sha256):
+        raise VideoNotesError("Nieprawidłowy SHA-256 źródłowego eksportu.")
     raw, _ = _read_stable_file(source)
     try:
         draft = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=_unique_keys,
@@ -104,9 +139,10 @@ def read_mobile_edit_draft_file(document: dict, source: Path) -> dict[str, str]:
     except (UnicodeError, json.JSONDecodeError) as error:
         raise VideoNotesError("Niepoprawny JSON lokalnego szkicu poprawek.") from error
     if (not isinstance(draft, dict)
-            or set(draft) != {"schema", "project_id", "edits"}
+            or set(draft) != {"schema", "project_id", "source_sha256", "edits"}
             or draft["schema"] != MOBILE_EDIT_DRAFT_SCHEMA
             or draft["project_id"] != canonical["project_id"]
+            or draft["source_sha256"] != source_sha256
             or not isinstance(draft["edits"], dict)):
         raise VideoNotesError("Nieprawidłowa struktura lub projekt lokalnych poprawek.")
     # render_mobile_corrections validates every ID/text before writing a patch.
