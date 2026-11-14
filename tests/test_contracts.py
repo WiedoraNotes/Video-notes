@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -65,6 +66,80 @@ class ContractTest(unittest.TestCase):
                     load_json(file)
             self.assertEqual(mutations, [True])
             self.assertGreater(file.stat().st_size, limit)
+
+    def test_project_reader_rejects_same_size_content_swap_with_identical_file_metadata(self):
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / "changes-in-place.json"
+            original = b'{"text":"private-01"}'
+            changed = b'{"text":"private-02"}'
+            self.assertEqual(len(original), len(changed))
+            target.write_bytes(original)
+            real_open = Path.open
+
+            class ChangingRead:
+                def __init__(self, stream):
+                    self.stream = stream
+                    self.payload = io.BytesIO(original)
+                    self.switched = False
+
+                def fileno(self):
+                    return self.stream.fileno()
+
+                def read(self, count=-1):
+                    return self.payload.read(count)
+
+                def seek(self, position, whence=0):
+                    if position == 0 and whence == 0 and not self.switched:
+                        self.payload = io.BytesIO(changed)
+                        self.switched = True
+                    return self.payload.seek(position, whence)
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *exc):
+                    self.stream.close()
+
+            def changed_open(path, *args, **kwargs):
+                stream = real_open(path, *args, **kwargs)
+                if path == target and args and args[0] == "rb":
+                    return ChangingRead(stream)
+                return stream
+
+            with patch.object(Path, "open", changed_open):
+                with self.assertRaisesRegex(VideoNotesError, "Zawartość JSON zmieniła"):
+                    load_json(target)
+            # A file can report the same inode, size and timestamp, yet still
+            # change its bytes between descriptor reads. No user data was changed.
+            self.assertEqual(target.read_bytes(), original)
+            self.assertEqual(load_json(target), {"text": "private-01"})
+
+    def test_project_reader_rejects_path_replacement_after_descriptor_validation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / "swap.json"
+            target.write_bytes(b'{"schema":"safe"}')
+            real_lstat = Path.lstat
+            reads = 0
+
+            def replaced_path(path, *args, **kwargs):
+                nonlocal reads
+                info = real_lstat(path, *args, **kwargs)
+                if path == target:
+                    reads += 1
+                    if reads == 2:
+                        from types import SimpleNamespace
+                        return SimpleNamespace(
+                            st_mode=info.st_mode, st_dev=info.st_dev,
+                            st_ino=info.st_ino + 99, st_size=info.st_size,
+                            st_mtime_ns=info.st_mtime_ns, st_ctime_ns=info.st_ctime_ns,
+                        )
+                return info
+
+            with patch.object(Path, "lstat", replaced_path):
+                with self.assertRaisesRegex(VideoNotesError, "podmieniony"):
+                    load_json(target)
+            self.assertEqual(reads, 2)
+            self.assertEqual(load_json(target), {"schema": "safe"})
 
     def test_bounded_json_accepts_exact_limit_and_rejects_symlink(self):
         with tempfile.TemporaryDirectory() as temp:
