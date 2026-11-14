@@ -942,22 +942,51 @@ class VideoNotesWindow:
         if not selection:
             messagebox.showinfo("Video Notes", "Zaznacz segment.")
             return
+        # Persist the edit independently from the follow-up export. A failed
+        # filesystem export must never be shown as a failed edit, because the
+        # user's corrected words are already present in edits.json.
+        folder = Path(self.project.get())
         try:
             if (selection[0] != self._current_segment_id
-                    or self._loaded_project_path != Path(self.project.get()).resolve()
+                    or self._loaded_project_path != folder.resolve()
                     or self._selected_original_text is None):
                 raise VideoNotesError("Edytor nie odpowiada otwartemu segmentowi. Otwórz go ponownie.")
-            edit_segment(Path(self.project.get()), selection[0],
+            edit_segment(folder, selection[0],
                          self.edit_text.get("1.0", "end-1c"),
                          expected_text=self._selected_original_text)
-            export_project(Path(self.project.get()))
-            # The pending editor draft has just been committed. A regular
-            # reload would still compare it to the old baseline and refuse
-            # to update the view, leaving a stale CAS token for the next edit.
-            self._load(silent=True, force=True)
-            self.status.set("Poprawkę i eksport zapisano lokalnie.")
         except VideoNotesError as error:
+            # On an actual conflict preserve the draft for manual review.
             messagebox.showerror("Video Notes", str(error))
+            return
+        except OSError:
+            messagebox.showerror("Video Notes",
+                "Nie udało się potwierdzić zapisu poprawki. Sprawdź dostępne miejsce i prawa do katalogu; szkic pozostał w edytorze.")
+            return
+
+        try:
+            export_project(folder)
+        except (VideoNotesError, OSError):
+            # The edit is COMMITTED. Refresh the CAS baseline even when the
+            # export failed; otherwise retrying Save produces a false conflict.
+            refreshed = self._load(silent=True, force=True)
+            self.status.set(
+                "Poprawkę zapisano w edits.json, ale eksport TXT/SRT/VTT/JSON nie powiódł się. "
+                "Poprzednie eksporty mogą być nieaktualne."
+            )
+            messagebox.showwarning("Video Notes — poprawka zapisana",
+                "Poprawka została zapisana, lecz nie udało się utworzyć eksportu. "
+                "Sprawdź miejsce na dysku i uruchom ponownie eksport, bez przepisywania poprawki."
+                + ("" if refreshed else " Ponownie otwórz projekt, aby odświeżyć edytor."))
+            return
+
+        # Both operations succeeded; force the editor to refresh its CAS
+        # baseline, never retaining a stale selection after save.
+        if not self._load(silent=True, force=True):
+            self.status.set("Poprawkę i eksport zapisano; ponownie otwórz projekt, aby odświeżyć edytor.")
+            messagebox.showwarning("Video Notes",
+                "Eksport zakończony, ale nie udało się odświeżyć widoku. Otwórz projekt ponownie.")
+            return
+        self.status.set("Poprawkę i eksport zapisano lokalnie.")
 
 
 

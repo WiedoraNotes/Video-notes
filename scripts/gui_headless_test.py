@@ -548,6 +548,72 @@ class GuiNotesHeadlessTest(unittest.TestCase):
         self.assertIn("Wykład dotyczy", self.gui.edit_text.get("1.0", "end-1c"))
         self.assertIn(expected_id, self.gui.status.get())
 
+    def test_saved_transcript_edit_survives_failed_export_and_next_edit(self):
+        """A failed 4-format export must not misreport the committed correction."""
+        from videonotes.errors import VideoNotesError
+        from videonotes.storage import read_project
+        self.assertTrue(self.gui._load())
+        sid = self.gui.segments.get_children()[0]
+        self.gui.segments.selection_set(sid)
+        self.gui._selected()
+        original_raw = (self.folder / "transcript.json").read_bytes()
+        correction = "Pierwsza poprawka zachowana mimo awarii eksportu"
+        self.gui.edit_text.delete("1.0", "end")
+        self.gui.edit_text.insert("1.0", correction)
+        with patch("videonotes.gui.export_project",
+                   side_effect=VideoNotesError("symulowany brak miejsca")) as export, \
+             patch("videonotes.gui.messagebox.showwarning") as warning, \
+             patch("videonotes.gui.messagebox.showerror") as error:
+            self.gui._save_edit()
+            export.assert_called_once_with(self.folder)
+            warning.assert_called_once()
+            error.assert_not_called()
+            self.assertIn("Poprawka została zapisana", warning.call_args.args[1])
+            self.assertIn("eksport", self.gui.status.get().lower())
+        self.assertEqual(read_project(self.folder)[2]["edits"][sid], correction)
+        self.assertEqual((self.folder / "transcript.json").read_bytes(), original_raw)
+        self.assertIsNone(self.gui._selected_original_text)
+        self.assertIsNone(self.gui._current_segment_id)
+        self.gui.segments.selection_set(sid)
+        self.gui._selected()
+        self.assertEqual(self.gui._selected_original_text, correction)
+        self.gui.edit_text.delete("1.0", "end")
+        self.gui.edit_text.insert("1.0", "Poprawka druga po awarii eksportu")
+        with patch("videonotes.gui.messagebox.showwarning") as warning, \
+             patch("videonotes.gui.messagebox.showerror") as error:
+            self.gui._save_edit()
+            warning.assert_not_called()
+            error.assert_not_called()
+        self.assertEqual(read_project(self.folder)[2]["edits"][sid],
+                         "Poprawka druga po awarii eksportu")
+        self.assertEqual((self.folder / "transcript.json").read_bytes(), original_raw)
+        self.assertFalse((self.folder / ".transcript-edits.lock").exists())
+
+    def test_failed_edit_write_keeps_unsaved_gui_draft_and_skips_export(self):
+        from videonotes.storage import read_project
+        self.assertTrue(self.gui._load())
+        sid = self.gui.segments.get_children()[0]
+        self.gui.segments.selection_set(sid)
+        self.gui._selected()
+        self.gui.edit_text.delete("1.0", "end")
+        self.gui.edit_text.insert("1.0", "NIEZAPISANA PO BLEDZIE DYSKU")
+        with patch("videonotes.gui.edit_segment", side_effect=OSError("simulated disk full")), \
+             patch("videonotes.gui.export_project") as export, \
+             patch("videonotes.gui.messagebox.showerror") as error, \
+             patch("videonotes.gui.messagebox.showwarning") as warning:
+            self.gui._save_edit()
+            export.assert_not_called()
+            error.assert_called_once()
+            warning.assert_not_called()
+            self.assertIn("Nie udało się potwierdzić zapisu", error.call_args.args[1])
+            self.assertNotIn("simulated disk full", error.call_args.args[1])
+        self.assertEqual(self.gui.edit_text.get("1.0", "end-1c"),
+                         "NIEZAPISANA PO BLEDZIE DYSKU")
+        self.assertEqual(self.gui._current_segment_id, sid)
+        self.assertIsNotNone(self.gui._selected_original_text)
+        self.assertTrue(self.gui._has_transcript_draft())
+        self.assertFalse(read_project(self.folder)[2]["edits"])
+
     def test_real_tk_rejects_stale_editor_then_accepts_fresh_correction(self):
         from videonotes.exports import edit_segment
         from videonotes.storage import read_project
