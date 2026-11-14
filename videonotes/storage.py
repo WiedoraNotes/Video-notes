@@ -1,8 +1,10 @@
 """Local atomic persistence. Raw ASR and user edits use separate files."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import stat
 import shutil
 import tempfile
 from pathlib import Path
@@ -153,15 +155,62 @@ def _invalid_json_constant(value: str) -> None:
 
 
 def load_json(path: Path) -> Any:
-    """Bound bytes even when the file grows after stat, and refuse symlinks."""
+    """Read project JSON from a stable regular file, then decode strictly.
+
+    Size and symlink preflight alone did not detect an in-place same-size
+    edit while reading the transcript/edits. Verify both passes from the
+    SAME descriptor and that its inode/metadata still match the visible path.
+    This is a snapshot read, not an inter-file transaction or lasting lock.
+    """
     try:
         file = Path(path)
-        if file.is_symlink() or not file.is_file() or file.stat().st_size > MAX_JSON_BYTES:
+        visible_before = file.lstat()
+        if (not stat.S_ISREG(visible_before.st_mode)
+                or visible_before.st_size > MAX_JSON_BYTES):
             raise VideoNotesError("Plik projektu nie istnieje, jest dowiązaniem lub jest zbyt duży.")
         with file.open("rb") as stream:
+            opened = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(opened.st_mode)
+                    or opened.st_dev != visible_before.st_dev
+                    or opened.st_ino != visible_before.st_ino
+                    or opened.st_size != visible_before.st_size
+                    or opened.st_size > MAX_JSON_BYTES):
+                raise VideoNotesError("Plik projektu zmienił się lub urósł podczas odczytu.")
             content = stream.read(MAX_JSON_BYTES + 1)
-        if len(content) > MAX_JSON_BYTES or file.is_symlink():
-            raise VideoNotesError("Plik projektu zmienił się lub urósł podczas odczytu.")
+            if len(content) > MAX_JSON_BYTES:
+                raise VideoNotesError("Plik projektu zmienił się lub urósł podczas odczytu.")
+            stream.seek(0)
+            verification = hashlib.sha256()
+            checked_size = 0
+            while True:
+                block = stream.read(min(64 * 1024, MAX_JSON_BYTES + 1 - checked_size))
+                if not block:
+                    break
+                checked_size += len(block)
+                if checked_size > MAX_JSON_BYTES:
+                    raise VideoNotesError("Plik projektu zmienił się lub urósł podczas odczytu.")
+                verification.update(block)
+            if checked_size != len(content) or verification.digest() != hashlib.sha256(content).digest():
+                raise VideoNotesError("Zawartość JSON zmieniła się podczas odczytu.")
+            closed = os.fstat(stream.fileno())
+        visible_after = file.lstat()
+        # On Windows, Path.lstat() and os.fstat() can report differing
+        # timestamp/identity representations for the same NTFS file.
+        # Compare like with like, then cross-check byte counts. Hashing
+        # both reads on the opened handle independently protects content.
+        for old, new in ((visible_before, visible_after), (opened, closed)):
+            if (old.st_dev != new.st_dev or old.st_ino != new.st_ino
+                    or old.st_size != new.st_size
+                    or old.st_mtime_ns != new.st_mtime_ns
+                    or old.st_ctime_ns != new.st_ctime_ns):
+                raise VideoNotesError("Plik JSON został zmieniony lub podmieniony podczas odczytu.")
+        if (len(content) != visible_before.st_size
+                or len(content) != opened.st_size
+                or len(content) != closed.st_size
+                or len(content) != visible_after.st_size):
+            raise VideoNotesError("Rozmiar pliku JSON zmienił się podczas odczytu.")
+        if not stat.S_ISREG(visible_after.st_mode):
+            raise VideoNotesError("Plik JSON został podmieniony podczas odczytu.")
         return json.loads(content.decode("utf-8"), object_pairs_hook=_unique_json_keys,
                           parse_constant=_invalid_json_constant)
     except (UnicodeError, ValueError, RecursionError, OSError) as error:

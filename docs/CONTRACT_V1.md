@@ -100,3 +100,28 @@ eksport czterech formatów przy prawidłowej długości. Historyczne projekty
 niespełniające nowych ograniczeń wymagają osobnej, bezpiecznej migracji,
 a nie automatycznego przycięcia słów. Żaden z tych testów nie zastępuje
 odbioru rzeczywistego wielogodzinnego nagrania.
+
+## Stabilny odczyt lokalnych checkpointów i poprawek JSON (14.11.2026)
+
+`load_json` odczytujący `project.json`, `transcript.json` i
+`edits.json` wcześniej sprawdzał limit bajtów i dowiązania, ale
+nie wykrywał bezbłędnie nadpisania zawartości w trakcie pojedynczego
+odczytu, zwłaszcza gdy obcy proces zapisał plik o identycznym
+rozmiarze na systemie plików z małą rozdzielczością zegara.
+
+Odczyt działa obecnie w dwóch przebiegach przez ten sam otwarty
+plik: pierwszy zbiera ograniczone dane (maksymalnie 64 MiB),
+drugi ponownie czyta w porcjach po 64 KiB i porównuje SHA-256.
+Następnie kontroluje zgodność obiektu pliku oraz widocznej ścieżki
+(przed, podczas i po odczycie): typ zwykłego pliku, numer nośnika,
+identyfikator, rozmiar i znaczniki modyfikacji. Plik zmieniający
+się podczas odczytu jest **odrzucany bez modyfikacji projektu**.
+Walidacja duplikatów JSON i samego kontraktu działa nadal osobno.
+
+Regresje w GitHub Actions symulują różne bajty z tego samego
+deskryptora mimo niezmienionych metadanych, podmianę pliku po
+odczycie oraz wzrost danych ponad limit. Nie jest to globalna
+transakcja trzech plików ani blokada przed kolejnymi zmianami
+po zakończeniu odczytu. Przy sporze z edytorem nadal obowiązują
+osobne blokady edycji i ponowne sprawdzenie projektu przed zapisem.
+Nie zastępuje to rzeczywistej awarii dysku na fizycznym Windows.
