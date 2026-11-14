@@ -30,6 +30,25 @@
     media: get("source-media"), player: get("source-player"),
     seek: get("seek-segment"), jump: get("jump-playhead")
   };
+  async function readStrictUtf8File(file, limit) {
+    // File.text() silently inserts U+FFFD for malformed UTF-8. That changes
+    // source words and can turn a corrupt portable transcript into an accepted
+    // import. Match the fail-closed Python contract with a fatal decoder.
+    if (!Number.isSafeInteger(file.size) || file.size < 0 || file.size > limit) {
+      throw new Error("Wybrany plik JSON przekracza limit lub ma nieprawidłowy rozmiar.");
+    }
+    var bytes = await file.arrayBuffer();
+    // Guard the actual bytes as well as File.size: even a mocked or changed
+    // file selection must never be decoded beyond our 20 MiB contract.
+    if (!bytes || !Number.isSafeInteger(bytes.byteLength) || bytes.byteLength > limit) {
+      throw new Error("Wybrany plik JSON przekracza limit 20 MiB.");
+    }
+    try {
+      return new TextDecoder("utf-8", {fatal: true}).decode(bytes);
+    } catch (_error) {
+      throw new Error("Plik JSON nie jest poprawnie zakodowany w UTF-8.");
+    }
+  }
   function message(text, error) {
     elements.status.textContent = text;
     elements.status.classList.toggle("error", Boolean(error));
@@ -333,8 +352,7 @@
       return;
     }
     try {
-      if (file.size > core.MAX_BYTES) throw new Error("Wybrany JSON przekracza limit 20 MB.");
-      var content = await file.text();
+      var content = await readStrictUtf8File(file, core.MAX_BYTES);
       var loaded = core.parseExport(content);
       if (revision !== sourceRevision) return; // Older slow file read must not replace newer import.
       // A user may edit the open document WHILE the next file is being read.
@@ -393,8 +411,7 @@
       return;
     }
     try {
-      if (file.size > core.MAX_PATCH_BYTES) throw new Error("Paczka poprawek przekracza 20 MiB.");
-      var payload = await file.text();
+      var payload = await readStrictUtf8File(file, core.MAX_PATCH_BYTES);
       if (revision !== patchRevision || startSourceRevision !== sourceRevision) return;
       var restored = core.parseCorrections(doc, payload);
       if (editRevision !== startEditRevision && hasUnsavedWork() &&
