@@ -120,7 +120,9 @@ def export_mobile_edit_draft_file(
         "source_sha256": source_sha256,
         "edits": {},
     }, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
-    return _publish_private_json(payload, destination, verify_source=verify_source)
+    report = _publish_private_json(payload, destination, verify_source=verify_source)
+    return {"draft_sha256": report["patch_sha256"],
+            "draft_bytes": report["patch_bytes"], "applied": False}
 
 
 def read_mobile_edit_draft_file(document: dict, source: Path, *, source_sha256: str) -> dict[str, str]:
