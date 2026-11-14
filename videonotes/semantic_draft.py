@@ -18,12 +18,12 @@ from .contracts import sha256_file
 from .errors import VideoNotesError
 from .media import executable
 from .notes import _hash, _select, _source
+from .semantic_process import MAX_REPLY_BYTES, run_bounded_llama
 from .storage import load_json, read_project
 
 SCHEMA = "videonotes-semantic-draft-v1"
 METHOD = "llama.cpp-cited-draft-unverified-v1"
 MAX_MODEL_BYTES = 32 * 1024**3
-MAX_REPLY_BYTES = 128 * 1024
 MAX_SECTIONS = 48
 SOURCE_ID = re.compile(r"[A-Za-z0-9_-]{1,60}\Z", re.ASCII)
 SOURCE_SCHEMA = {
@@ -185,7 +185,7 @@ def _safe_new_json(output: Path, document: dict) -> None:
 def create_semantic_draft(folder: Path, output: Path, *, model: Path,
                           llama_cli: str = "llama-cli", section_minutes: int = 10,
                           claim_limit: int = 4, max_sections: int = 24,
-                          timeout_seconds: int = 240, runner=subprocess.run) -> dict:
+                          timeout_seconds: int = 240, runner=run_bounded_llama) -> dict:
     """Call an owner-provided local model, marking all claims as UNVERIFIED."""
     if (type(section_minutes) is not int or not 1 <= section_minutes <= 60 or
             type(claim_limit) is not int or not 1 <= claim_limit <= 5 or
