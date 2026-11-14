@@ -76,3 +76,27 @@ Regresje syntetyczne sprawdzają zgodność Python/Node, brak częściowego
 zapisu poprawek, poprawny UTF-8 i emoji oraz ochronę oryginalnego ASR.
 To nie jest próba jakości transkrypcji z prawdziwej mowy ani odbiór
 fizycznych urządzeń.
+
+## Granice długości tekstu i identyfikatora projektu — 14.11.2026
+
+Walidacja przenośna `videonotes-export-v1` w przeglądarce liczy długość
+ciągów JavaScript w **jednostkach UTF-16**. Historycznie część desktopowa
+Python liczyła punkty kodowe. Na przykład 5001 emoji zajmuje 5001
+znaków z perspektywy `len(str)`, lecz 10002 jednostki UTF-16.
+Taka poprawka mogła być zapisana w projekcie Windows, po czym odrzucona
+przez czytnik WWW/mobilny.
+
+Desktop stosuje teraz `utf16_code_units` z `videonotes/contracts.py`
+w walidacji segmentów, poprawek, identyfikatora projektu oraz tekstów
+modelu, gdzie obowiązują limity znakowe. Granica treści segmentu wynosi
+**10000 jednostek UTF-16** (np. 5000 emoji, ale nie 5001).
+Identyfikator projektu może mieć najwyżej **128 jednostek UTF-16**.
+Import poprawek WWW jest zgodny z tą samą granicą. Dotyczy to
+nowych zapisów i walidacji podczas otwierania plików.
+
+Testy syntetyczne sprawdzają oba brzegi limitu, zgodność Python/JS,
+ochronę `transcript.json`, odmowę nadmiernej poprawki oraz pełny lokalny
+eksport czterech formatów przy prawidłowej długości. Historyczne projekty
+niespełniające nowych ograniczeń wymagają osobnej, bezpiecznej migracji,
+a nie automatycznego przycięcia słów. Żaden z tych testów nie zastępuje
+odbioru rzeczywistego wielogodzinnego nagrania.
