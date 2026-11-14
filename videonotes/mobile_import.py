@@ -13,7 +13,7 @@ from pathlib import Path
 
 from .errors import VideoNotesError
 from .mobile_contract import (
-    MAX_JSON_BYTES, _invalid_constant, _unique_keys,
+    _invalid_constant, _unique_keys,
     parse_portable_export, validate_portable_export,
 )
 
