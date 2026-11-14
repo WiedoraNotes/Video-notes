@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 from .errors import VideoNotesError
-from .contracts import valid_unicode_text
+from .contracts import valid_unicode_text, utf16_code_units
 from .storage import atomic_write, read_project, save_json
 from .edit_lock import transcript_edit_lock
 
@@ -41,10 +41,10 @@ def edit_segment(folder: Path, segment_id: str, updated: str, *,
     while the user is typing, and an older GUI window would overwrite it.
     Existing CLI callers may omit expected_text for an explicit unconditional edit.
     """
-    if not valid_unicode_text(updated) or len(updated) > 10000:
+    if not valid_unicode_text(updated) or utf16_code_units(updated) > 10000:
         raise VideoNotesError("Nieprawidłowa poprawka transkrypcji.")
     if expected_text is not None and (not valid_unicode_text(expected_text)
-                                     or len(expected_text) > 10000):
+                                     or utf16_code_units(expected_text) > 10000):
         raise VideoNotesError("Nieprawidłowy warunek poprzedniej wersji poprawki.")
     # Both GUI/manual changes and browser patch imports serialize reads+writes.
     with transcript_edit_lock(folder):
