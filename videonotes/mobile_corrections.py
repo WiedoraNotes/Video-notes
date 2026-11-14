@@ -52,7 +52,7 @@ def parse_mobile_corrections(document: dict, payload: bytes) -> dict[str, str]:
         patch: Any = json.loads(payload.decode("utf-8-sig"),
                                 object_pairs_hook=_unique_keys,
                                 parse_constant=_invalid_constant)
-    except (UnicodeError, json.JSONDecodeError) as error:
+    except (UnicodeError, ValueError, RecursionError) as error:
         raise VideoNotesError("Paczka poprawek ma nieprawidłowy JSON.") from error
     if (not isinstance(patch, dict) or
             set(patch) != {"schema", "project_id", "changes"} or
