@@ -88,6 +88,6 @@ def parse_portable_export(payload: bytes) -> dict:
         data = json.loads(payload.decode("utf-8-sig"),
                           object_pairs_hook=_unique_keys,
                           parse_constant=_invalid_constant)
-    except (UnicodeError, json.JSONDecodeError) as error:
+    except (UnicodeError, ValueError, RecursionError) as error:
         raise VideoNotesError("Niepoprawny JSON przenośnej transkrypcji.") from error
     return validate_portable_export(data)
