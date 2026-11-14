@@ -66,16 +66,25 @@ function boot() {
   vm.runInNewContext(code, {window: win, document: doc,
     Blob: class { constructor(parts) {state.payload = parts.join("");} },
     URL: {createObjectURL: () => "blob:local", revokeObjectURL(url) { state.revoked.push(url); } },
-    setTimeout: fn => fn()
+    setTimeout: fn => fn(),
+    TextDecoder: TextDecoder
   }, {filename: "web/app.js"});
+  function binaryFile(value) {
+    // Preserve original bytes so controller tests catch invalid UTF-8, unlike
+    // the lossy File.text() decoding that replaces malformed sequences.
+    const binary = typeof value === "string" ? new TextEncoder().encode(value) : new Uint8Array(value);
+    return binary.buffer.slice(binary.byteOffset, binary.byteOffset + binary.byteLength);
+  }
   async function importFile(data, read = async () => JSON.stringify(data)) {
     return elements["source-file"].events.change({
-      target: {files: [{size: 1024, name: data.project_id, text: read}]}
+      target: {files: [{size: 1024, name: data.project_id,
+        arrayBuffer: async () => binaryFile(await read())}]}
     });
   }
   async function importPatch(data, read = async () => JSON.stringify(data)) {
     return elements["corrections-file"].events.change({
-      target: {files:[{size:1024,name:"web-corrections.json",text:read}]}
+      target: {files:[{size:1024,name:"web-corrections.json",
+        arrayBuffer: async () => binaryFile(await read())}]}
     });
   }
   function importMedia(size = 1024) {
@@ -95,6 +104,60 @@ function unload(ux) {
   ux.win.events.beforeunload(event);
   return event;
 }
+
+test("invalid UTF-8 source bytes are rejected without silently changing existing words", async () => {
+  const ux = boot();
+  await ux.importFile(source("original", 2));
+  ux.select(0);
+  ux.elements["edit-text"].value = "Previously saved sentence";
+  ux.elements["save-edit"].events.click();
+  const malformed = Uint8Array.from([0x7b, 0x22, 0xc3, 0x28, 0x22, 0x3a, 0x31, 0x7d]);
+  ux.state.allow = true;
+  await ux.importFile(source("incoming", 1), async () => malformed);
+  assert.match(ux.elements["status"].textContent, /UTF-8/);
+  assert.match(ux.elements["match-count"].textContent, /^2 z 2/);
+  assert.equal(ux.elements["edit-text"].value, "Previously saved sentence");
+  assert.equal(ux.elements["edit-count"].textContent, "1 poprawek w pamięci");
+  assert.equal(unload(ux).prevented, true);
+});
+
+test("invalid UTF-8 correction pack never erases current editor changes", async () => {
+  const ux = boot();
+  const doc = source("current", 2);
+  await ux.importFile(doc);
+  ux.select(0);
+  ux.elements["edit-text"].value = "Private local correction";
+  ux.elements["save-edit"].events.click();
+  ux.state.allow = true;
+  await ux.importPatch(doc, async () => Uint8Array.from([0x22, 0xed, 0xa0, 0x80, 0x22]));
+  assert.match(ux.elements["status"].textContent, /UTF-8/);
+  assert.equal(ux.elements["edit-text"].value, "Private local correction");
+  assert.equal(ux.elements["edit-count"].textContent, "1 poprawek w pamięci");
+});
+
+test("explicit replacement character and UTF-8 BOM are valid source content", async () => {
+  const ux = boot();
+  const model = source("UTF8", 1);
+  model.segments[0].text = "Tekst z dosłownym znakiem \ufffd oraz \ud83d\ude42";
+  await ux.importFile(model, async () => Uint8Array.from([
+    0xef, 0xbb, 0xbf, ...new TextEncoder().encode(JSON.stringify(model))
+  ]));
+  assert.match(ux.elements["status"].textContent, /Otworzono lokalnie/);
+  ux.select(0);
+  assert.equal(ux.elements["edit-text"].value, model.segments[0].text);
+});
+
+test("actual file byte size above 20 MiB is rejected despite small declared File.size", async () => {
+  const ux = boot();
+  await ux.importFile(source("kept", 1));
+  const content = {byteLength: core.MAX_BYTES + 1};
+  const input = ux.elements["source-file"];
+  await input.events.change({target:{files:[{
+    size: 1, name:"oversized.json", arrayBuffer: async () => content
+  }]}});
+  assert.match(ux.elements["status"].textContent, /20 MiB/);
+  assert.match(ux.elements["match-count"].textContent, /^1 z 1/);
+});
 
 test("pending textarea changes are protected when selecting a different segment", async () => {
   const ux = boot();
