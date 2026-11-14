@@ -16,6 +16,25 @@ Skrypt uruchamia rzeczywisty lokalny proces llama-cli poprzez istniejące semant
 
 Raport nie uznaje treści za zgodną z rzeczywistym nagraniem. Wymagane są nadal: licencjonowany model, test naturalnej mowy, poprawność liczb i definicji na źródle, ręczny review/approve/reject, pełny sprzętowy pomiar RAM/CPU i sprawdzenie po restarcie. Atrapom w testach jednostkowych nie przyznawać statusu odbioru. Brak takiego dowodu oznacza pozostawienie VN-02-01 bez DONE.
 
+### Limity rzeczywistego procesu lokalnego GGUF
+
+Standardowe `semantic-draft` oraz prywatny skrypt pomiarowy używają teraz tego
+samego runnera procesu `videonotes/semantic_process.py`. Odpowiedź
+`llama-cli` trafia do potoku czytanego porcjami i podlega rzeczywistemu
+limitowi 128 KiB **w trakcie generowania**, a nie dopiero po zakończeniu
+procesu. Przy nadmiernym wyjściu lub przekroczeniu limitu czasu runner
+zatrzymuje grupę procesu razem z procesami potomnymi, nie ujawnia promptu
+ani stderr w logach, a istniejące notatki nie są nadpisywane. Skrypt
+pomiarowy nadal może zbierać opcjonalne próbki RSS/CPU z tego samego
+uruchomionego procesu. Jeżeli `psutil` nie jest zainstalowany lub próbka
+się nie powiodła, metryki pozostają `null`, nigdy zgadywane.
+
+Testy jednostkowe uruchamiają **rzeczywiste lokalne procesy Python**
+z kontrolowanym stdout, nadmiernym wyjściem i zawieszeniem; nie wykonują
+prawdziwej inferencji GGUF ani nie zatwierdzają jakości faktów.
+Przed NOTE-01 nadal obowiązują: legalny model, uruchomienie na sprzęcie
+docelowym, cytaty i ręczna ocena twierdzeń z odsłuchem źródła.
+
 ## VN-08-02 — niezależny kontrakt mobilny
 
 Pythonowy videonotes/mobile_import.py to przygotowanie granicy importu, nie gotowa aplikacja Android ani iOS. Odczytuje lokalny plik w porcjach do 64 KiB, do 20 MiB łącznie, sprawdza podstawowe znaczniki podmiany źródła, liczy SHA-256 i wymaga poprawnego kontraktu videonotes-export-v1. Zwraca odłączoną kopię danych. Nie zmienia surowej transkrypcji, nie tworzy konta i nie łączy się z siecią. Niepoprawny i przerwany import nie zapisuje częściowych wyników. Na obecnym etapie po awarii należy ponownie wybrać plik, bo wznawianie od offsetu po restarcie nie jest implementowane.
