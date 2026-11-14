@@ -306,7 +306,7 @@
   elements.save.addEventListener("click", function () {
     if (!doc || selected === null) return;
     var text = elements.text.value;
-    if (text.length > core.MAX_TEXT || text.includes("\u0000")) {
+    if (!core.validText(text, core.MAX_TEXT)) {
       message("Poprawka jest zbyt długa lub zawiera niedozwolony znak.", true);
       return;
     }
