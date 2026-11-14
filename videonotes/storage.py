@@ -194,13 +194,21 @@ def load_json(path: Path) -> Any:
                 raise VideoNotesError("Zawartość JSON zmieniła się podczas odczytu.")
             closed = os.fstat(stream.fileno())
         visible_after = file.lstat()
-        for old, new in ((visible_before, opened), (opened, closed),
-                         (closed, visible_after)):
+        # On Windows, Path.lstat() and os.fstat() can report differing
+        # timestamp/identity representations for the same NTFS file.
+        # Compare like with like, then cross-check byte counts. Hashing
+        # both reads on the opened handle independently protects content.
+        for old, new in ((visible_before, visible_after), (opened, closed)):
             if (old.st_dev != new.st_dev or old.st_ino != new.st_ino
                     or old.st_size != new.st_size
                     or old.st_mtime_ns != new.st_mtime_ns
                     or old.st_ctime_ns != new.st_ctime_ns):
                 raise VideoNotesError("Plik JSON został zmieniony lub podmieniony podczas odczytu.")
+        if (len(content) != visible_before.st_size
+                or len(content) != opened.st_size
+                or len(content) != closed.st_size
+                or len(content) != visible_after.st_size):
+            raise VideoNotesError("Rozmiar pliku JSON zmienił się podczas odczytu.")
         if not stat.S_ISREG(visible_after.st_mode):
             raise VideoNotesError("Plik JSON został podmieniony podczas odczytu.")
         return json.loads(content.decode("utf-8"), object_pairs_hook=_unique_json_keys,
