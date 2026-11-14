@@ -53,6 +53,21 @@ async function browserScenario() {
   if (!label.textContent.startsWith("2 z 2")) {
     throw new Error("Import lokalnego JSON nie zakończył się: " + status.textContent);
   }
+  // Preserve valid local transcript after corrupt bytes. File.text() would
+  // silently replace C3 28 with U+FFFD; fatal TextDecoder must reject them.
+  Object.defineProperty(input, "files", {configurable: true, value: [
+    new File([new Uint8Array([0x7b, 0x22, 0xc3, 0x28, 0x22, 0x3a, 0x31, 0x7d])],
+      "malformed-utf8.json", {type: "application/json"})
+  ]});
+  input.dispatchEvent(new Event("change", {bubbles: true}));
+  const malformedUntil = Date.now() + 4000;
+  while (!status.textContent.includes("UTF-8") && Date.now() < malformedUntil) {
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  if (!status.textContent.includes("UTF-8") || !label.textContent.startsWith("2 z 2")) {
+    throw new Error("Invalid UTF-8 was accepted or replaced current source");
+  }
+
   const historyUndo = document.getElementById("undo-edit");
   const historyRedo = document.getElementById("redo-edit");
   if (!historyUndo || !historyRedo || !historyUndo.disabled || !historyRedo.disabled) {
