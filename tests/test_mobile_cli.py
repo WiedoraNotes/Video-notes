@@ -280,6 +280,31 @@ class MobileCliTest(unittest.TestCase):
         self.assertFalse(any(item.name.startswith(".vn-mobile-patch-")
                              for item in self.source.parent.iterdir()))
 
+    def test_removed_draft_during_patch_publication_cannot_publish(self):
+        import videonotes.cli as module
+
+        original_publish = module.export_mobile_corrections_file
+        source_before = self.source.read_bytes()
+
+        def remove_draft_after_validation(*args, **kwargs):
+            self.edits.unlink()
+            return original_publish(*args, **kwargs)
+
+        with patch.object(module, "export_mobile_corrections_file",
+                          side_effect=remove_draft_after_validation):
+            code, output, error = self.execute(
+                "mobile-patch-create", "--source", str(self.source),
+                "--edits", str(self.edits), "--output", str(self.patch),
+            )
+        self.assertEqual(code, 2)
+        self.assertFalse(output)
+        self.assertFalse(self.patch.exists())
+        self.assertEqual(self.source.read_bytes(), source_before)
+        self.assertNotIn("Traceback", error)
+        self.assert_private_output(error)
+        self.assertFalse(any(item.name.startswith(".vn-mobile-patch-")
+                             for item in self.source.parent.iterdir()))
+
     def test_exact_draft_snapshot_digest_from_same_validated_bytes(self):
         from videonotes.mobile_import import read_mobile_edit_draft_file
         edits, digest = read_mobile_edit_draft_file(
