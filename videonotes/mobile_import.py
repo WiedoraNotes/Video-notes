@@ -1,7 +1,8 @@
-"""Read-only, bounded local file adapter for a future Android/iOS UI.
+"""Bounded local portable file exchange for a future Android/iOS UI.
 
-On interrupted import the caller retries the file selection. Never writes
-transcripts, edits or checkpoints; byte-range crash resume is not implemented.
+Imports and previews are read-only. Explicit exports create only new private
+JSON files without changing project transcripts, edits or checkpoints.
+Byte-range crash resume is not implemented.
 """
 from __future__ import annotations
 
