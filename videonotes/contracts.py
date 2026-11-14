@@ -18,6 +18,19 @@ MAX_TEXT_LENGTH = 10000
 MAX_SEGMENTS = 2_000_000
 
 
+def valid_unicode_text(value: object) -> bool:
+    """Reject isolated UTF-16 surrogate code points from decoded JSON.
+
+    Python json.loads() accepts escaped \\ud800/\\udc00 even though those are
+    not Unicode scalar values and cannot be encoded as valid UTF-8. JavaScript
+    can also retain them in strings but silently replaces them during Blob
+    export, which would modify the user's words without consent.
+    Astral Unicode characters (emoji, historic scripts) are allowed.
+    """
+    return (isinstance(value, str) and "\\x00" not in value
+            and all(not 0xD800 <= ord(char) <= 0xDFFF for char in value))
+
+
 def sha256_file(file: Path, *, block_bytes: int = 2 * 1024 * 1024) -> str:
     """Fingerprint large recordings without holding them in RAM."""
     digest = hashlib.sha256()
@@ -34,7 +47,7 @@ def _number(value: Any, label: str) -> int:
 
 
 def _text(value: Any, label: str, limit: int = MAX_TEXT_LENGTH) -> str:
-    if not isinstance(value, str) or len(value) > limit or "\x00" in value:
+    if not valid_unicode_text(value) or len(value) > limit:
         raise VideoNotesError(f"Nieprawidłowe pole {label}.")
     return value
 
@@ -42,7 +55,7 @@ def _text(value: Any, label: str, limit: int = MAX_TEXT_LENGTH) -> str:
 def validate_project(data: Any) -> dict[str, Any]:
     if not isinstance(data, dict) or data.get("schema") != PROJECT_SCHEMA:
         raise VideoNotesError("Nieobsługiwany format project.json.")
-    if not isinstance(data.get("id"), str) or not data["id"]:
+    if not valid_unicode_text(data.get("id")) or not data["id"]:
         raise VideoNotesError("Projekt nie ma identyfikatora.")
     source = data.get("source")
     processing = data.get("processing")
