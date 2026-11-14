@@ -95,6 +95,9 @@ def parser() -> argparse.ArgumentParser:
     draft_init = sub.add_parser("mobile-draft-init", help="Utwórz lokalny szkic poprawek v2 powiązany z SHA-256 źródła")
     draft_init.add_argument("--source", required=True, type=Path)
     draft_init.add_argument("--output", required=True, type=Path)
+    draft_check = sub.add_parser("mobile-draft-check", help="Sprawdź lokalny szkic poprawek i źródło, bez zapisu i wyświetlania tekstu")
+    draft_check.add_argument("--source", required=True, type=Path)
+    draft_check.add_argument("--edits", required=True, type=Path)
     mobile_patch_create = sub.add_parser("mobile-patch-create", help="Utwórz lokalną paczkę poprawek bez nadpisania")
     mobile_patch_create.add_argument("--source", required=True, type=Path)
     mobile_patch_create.add_argument("--edits", required=True, type=Path, help="Prywatny JSON videonotes-mobile-edit-draft-v2")
@@ -390,13 +393,33 @@ def main(argv: list[str] | None = None) -> int:
         elif args.action == "mobile-patch-check":
             source = import_portable_file(args.source)
             preview = import_mobile_corrections_file(source["document"], args.file)
-            if import_portable_file(args.source)["source_sha256"] != source["source_sha256"]:
-                raise VideoNotesError("Transkrypcja źródłowa zmieniła się podczas sprawdzania.")
+            if (import_portable_file(args.source)["source_sha256"] != source["source_sha256"]
+                    or read_stable_local_json(args.file)[1] != preview["source_sha256"]):
+                raise VideoNotesError("Źródło lub paczka poprawek zmieniły się podczas sprawdzania.")
             print(json.dumps({
                 "schema": "videonotes-web-corrections-v1",
                 "changes": len(preview["changes"]),
                 "patch_sha256": preview["source_sha256"],
                 "patch_bytes": preview["source_bytes"], "read_only": True,
+            }, ensure_ascii=False))
+        elif args.action == "mobile-draft-check":
+            source = import_portable_file(args.source)
+            edits, snapshot_sha256 = read_mobile_edit_draft_file(
+                source["document"], args.edits,
+                source_sha256=source["source_sha256"], include_digest=True,
+            )
+            if (import_portable_file(args.source)["source_sha256"] != source["source_sha256"]
+                    or read_stable_local_json(args.edits)[1] != snapshot_sha256):
+                raise VideoNotesError("Źródło lub szkic zmieniły się podczas sprawdzania.")
+            changed = sum(1 for segment in source["document"]["segments"]
+                          if segment["id"] in edits and edits[segment["id"]] != segment["text"])
+            print(json.dumps({
+                "schema": "videonotes-mobile-edit-draft-v2",
+                "segments": len(source["document"]["segments"]),
+                "submitted_edits": len(edits),
+                "actual_changes": changed,
+                "unchanged_edits": len(edits) - changed,
+                "source_sha256": source["source_sha256"], "read_only": True,
             }, ensure_ascii=False))
         elif args.action == "mobile-draft-init":
             source = import_portable_file(args.source)
