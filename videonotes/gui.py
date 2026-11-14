@@ -172,16 +172,34 @@ class VideoNotesWindow:
     def _work(self, *, resume: bool) -> None:
         if self.active:
             return
+        # Tk variables and widget-backed maps are only accessed on the GUI
+        # thread. Taking a complete snapshot BEFORE starting the worker also
+        # prevents later edits to the form from changing an in-flight project.
         project_path = self.project.get().strip()
         if not project_path:
             messagebox.showwarning("Video Notes", "Wybierz katalog projektu.")
             return
-        if not resume and (not self.source.get().strip() or not self.model.get().strip()):
-            messagebox.showwarning("Video Notes", "Wskaż źródło i lokalny model.")
-            return
-        if not resume and self.stream.get() not in self.streams:
-            messagebox.showwarning("Video Notes", "Wykryj i wybierz właściwą ścieżkę audio.")
-            return
+        selected_source = None
+        selected_model = None
+        selected_stream_index = None
+        selected_engine = None
+        selected_language = None
+        if not resume:
+            source_path = self.source.get().strip()
+            model_path = self.model.get().strip()
+            chosen_stream = self.stream.get()
+            if not source_path or not model_path:
+                messagebox.showwarning("Video Notes", "Wskaż źródło i lokalny model.")
+                return
+            if chosen_stream not in self.streams:
+                messagebox.showwarning("Video Notes", "Wykryj i wybierz właściwą ścieżkę audio.")
+                return
+            selected_source = Path(source_path)
+            selected_model = Path(model_path)
+            selected_stream_index = self.streams[chosen_stream]
+            selected_engine = self.engine.get()
+            selected_language = self.language.get()
+        folder = Path(project_path)
         self.cancel.clear()
         self.active = True
         self.start_button.configure(state="disabled")
@@ -190,10 +208,11 @@ class VideoNotesWindow:
         def worker() -> None:
             try:
                 if not resume:
-                    create_project(Path(self.source.get()), Path(project_path), model=Path(self.model.get()), whisper_cli=self.engine.get(),
-                                   stream=self.streams[self.stream.get()], language=self.language.get())
-                transcribe_project(Path(project_path), progress=lambda done, total: self.events.put(("progress", (done, total))), cancel=self.cancel.is_set)
-                export_project(Path(project_path))
+                    create_project(selected_source, folder, model=selected_model,
+                                   whisper_cli=selected_engine,
+                                   stream=selected_stream_index, language=selected_language)
+                transcribe_project(folder, progress=lambda done, total: self.events.put(("progress", (done, total))), cancel=self.cancel.is_set)
+                export_project(folder)
                 self.events.put(("done", "Transkrypcja i eksport zakończone."))
             except VideoNotesError as error:
                 self.events.put(("error", str(error)))
