@@ -9,7 +9,7 @@ import json
 import re
 from pathlib import Path
 
-from .contracts import MAX_TEXT_LENGTH
+from .contracts import MAX_TEXT_LENGTH, valid_unicode_text
 from .errors import VideoNotesError
 from .storage import read_project, save_json
 from .stable_local_read import read_stable_local_json
@@ -22,7 +22,7 @@ SEGMENT_ID = re.compile(r"[A-Za-z0-9_-]{1,60}\Z")
 
 
 def _valid_text(value: object) -> bool:
-    return isinstance(value, str) and len(value) <= MAX_TEXT_LENGTH and "\x00" not in value
+    return valid_unicode_text(value) and len(value) <= MAX_TEXT_LENGTH
 
 
 def _unique_object(pairs: list[tuple[str, object]]) -> dict:
