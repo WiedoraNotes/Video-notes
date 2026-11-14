@@ -87,7 +87,7 @@
     if (selected !== null && doc.segments[selected].id === id) {
       elements.text.value = value;
     }
-    matches = core.search(doc, edits, elements.search.value);
+    matches = core.searchPrepared(doc, edits, elements.search.value);
     renderList();
   }
   function travelHistory(source, target, operation) {
@@ -206,7 +206,7 @@
         var visible = matches.indexOf(index);
         if (visible < 0) {
           elements.search.value = "";
-          matches = core.search(doc, edits, "");
+          matches = core.searchPrepared(doc, edits, "");
           visible = index;
         }
         page = Math.floor(visible / PAGE_SIZE);
@@ -223,7 +223,7 @@
       var found = matches.indexOf(index);
       if (found < 0) {
         elements.search.value = "";
-        matches = core.search(doc, edits, "");
+        matches = core.searchPrepared(doc, edits, "");
         found = index;
       }
       page = Math.floor(found / PAGE_SIZE);
@@ -286,7 +286,7 @@
   }
   function filter() {
     if (!doc) return;
-    matches = core.search(doc, edits, elements.search.value);
+    matches = core.searchPrepared(doc, edits, elements.search.value);
     page = 0;
     renderList();
   }
@@ -316,7 +316,7 @@
     if (text === item.text) delete edits[item.id];
     else edits[item.id] = text;
     recordChange(item.id, before, text);
-    matches = core.search(doc, edits, elements.search.value);
+    matches = core.searchPrepared(doc, edits, elements.search.value);
     renderList();
     message("Poprawkę zachowano tylko w pamięci strony. Pobierz plik, aby nie utracić zmian.", false);
   });
@@ -331,7 +331,7 @@
     delete edits[item.id];
     elements.text.value = item.text;
     recordChange(item.id, before, item.text);
-    matches = core.search(doc, edits, elements.search.value);
+    matches = core.searchPrepared(doc, edits, elements.search.value);
     renderList();
     message("Przywrócono segment z importowanego pliku. Źródło na dysku pozostaje bez zmian.", false);
   });
@@ -368,7 +368,7 @@
       clearHistory();
       selected = null;
       page = 0;
-      matches = core.search(doc, edits, "");
+      matches = core.searchPrepared(doc, edits, "");
       elements.search.value = "";
       elements.search.disabled = false;
       elements.corrections.disabled = false;
@@ -422,7 +422,7 @@
       edits = restored;
       clearHistory(); // A restored patch is a new editing baseline, not a fake history entry.
       editRevision += 1;
-      matches = core.search(doc, edits, elements.search.value);
+      matches = core.searchPrepared(doc, edits, elements.search.value);
       page = 0;
       if (selected !== null) elements.text.value = current(doc.segments[selected]);
       renderList();
