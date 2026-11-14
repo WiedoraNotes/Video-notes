@@ -47,3 +47,17 @@ Przed publikacją `edits.json` importer nadal ponownie sprawdza aktualny stan
 projektu, konflikty oraz SHA-256 paczki i zachowuje oryginalną transkrypcję.
 Są to testy bezpieczeństwa odczytu na CI, **nie** fizyczny odbiór Windows,
 NVDA ani gwarancja atomowości przy zanikach zasilania.
+
+## Obsługa nadmiernego zagnieżdżenia danych JSON (14.11.2026)
+
+Zewnętrzny plik poprawki, eksport transkrypcji i szkic mobilny mogą zawierać
+prawidłowo kodowany, ale wrogi JSON o tysiącach nawiasów albo ogromnych
+liczbach. Odczyt kończy się teraz kontrolowanym błędem `VideoNotesError`
+zamiast nieobsłużonego wyjątku dekodera (`RecursionError` lub `ValueError`).
+Dotyczy to importera WWW, walidacji przenośnej, lokalnych plików projektów
+oraz odpowiedzi opcjonalnego modelu semantycznego. Brak częściowego zapisu
+`edits.json` i brak pełnych prywatnych dokumentów w standardowym błędzie CLI.
+
+Regresje uruchamiają syntetyczne zagnieżdżone dane na GitHub Actions,
+ale nie są testem fizycznego Windows, sprzętowego ASR ani pełnym audytem
+bezpieczeństwa. Wszystkie odbiory użytkownika pozostają do wykonania.
