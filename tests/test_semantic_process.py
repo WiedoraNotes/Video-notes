@@ -74,7 +74,7 @@ class BoundedLlamaProcessTest(unittest.TestCase):
             self.assertEqual(path.read_bytes(), b"VALID")
             self.assertEqual(len(runner.runs), 1)
             self.assertGreaterEqual(runner.runs[0]["elapsed_s"], 0)
-            self.assertIn("sampled_cpu_s", runner.runs)
+            self.assertIn("sampled_cpu_s", runner.runs[0])
 
 
 if __name__ == "__main__":
