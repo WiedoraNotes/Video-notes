@@ -103,22 +103,33 @@ segmentów/poprawek i SHA-256, **bez wypowiedzianych słów i identyfikatora pro
 
 ~~~powershell
 python -m videonotes mobile-import-check "C:\KWN\exports\transcript.json"
+python -m videonotes mobile-draft-init --source "C:\KWN\exports\transcript.json" --output "C:\KWN\prywatne\moje-edits.json"
 python -m videonotes mobile-patch-create --source "C:\KWN\exports\transcript.json" --edits "C:\KWN\prywatne\moje-edits.json" --output "C:\KWN\prywatne\poprawki-nowe.json"
 python -m videonotes mobile-patch-check --source "C:\KWN\exports\transcript.json" --file "C:\KWN\prywatne\poprawki-nowe.json"
 ~~~
 
-Plik `moje-edits.json` należy przygotować lokalnie według schematu (tutaj
-wyłącznie fikcyjny przykład; `project_id` i `id` muszą odpowiadać oryginałowi):
+Polecenie `mobile-draft-init` tworzy **nowy**, bezpieczny szablon zawierający
+identyfikator projektu i prawdziwy SHA-256 wskazanego pliku transkrypcji.
+Nie nadpisuje istniejącego pliku. W szablonie należy ręcznie uzupełnić wyłącznie
+mapę `edits`, nie zmieniając `project_id` ani `source_sha256`. Przykład schematu:
 
 ~~~json
 {
-  "schema": "videonotes-mobile-edit-draft-v1",
+  "schema": "videonotes-mobile-edit-draft-v2",
   "project_id": "projekt-testowy",
+  "source_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
   "edits": {
     "s0": "Poprawiony fragment transkrypcji"
   }
 }
 ~~~
+
+Wartość `source_sha256` w przykładzie jest fikcyjna: poprawną zapisuje wyłącznie
+`mobile-draft-init`. Starsze szkice `videonotes-mobile-edit-draft-v1` bez
+fingerprintu są świadomie odrzucane, aby edycja nie trafiła do innej wersji
+transkrypcji o tym samym `project_id` i identyfikatorach segmentów.
+Podczas tworzenia paczki program ponownie odczytuje SHA pliku źródłowego przed
+publikacją; jeśli źródło się zmieniło, nowy plik poprawek nie powstaje.
 
 Tekst poprawek przechowywany jest **wyłącznie w pliku**, nigdy w argumentach
 procesu ani standardowym raporcie JSON. Parser odrzuca zduplikowane pola

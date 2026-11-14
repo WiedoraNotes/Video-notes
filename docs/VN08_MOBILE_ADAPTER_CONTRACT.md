@@ -28,3 +28,21 @@ iOS: dostęp do mikrofonu wymaga zgody, a przechwytywanie ekranu/audio i działa
 ## Testy i odbiór
 
 Automatyczne `python -m unittest tests.test_mobile_contract -v` obejmują odczyt, kopię bez mutacji, Unicode, powtórzenia mowy, odrzucanie duplikatów kluczy, błędnych czasów, przekroczenia limitu, niepoprawnego UTF-8 i segmentów. Przydatne późniejsze testy kontraktowe: wspólne przykłady Python/JS/Kotlin/Swift, aktualizacja v1→v2, restart z checkpointu, brak uprawnień, brak pamięci, brak sieci. **Testy emulatorów i fizycznych Android/iOS, mikrofonu, loopback i sklepu nie zostały wykonane.**
+
+## Powiązanie lokalnego szkicu edycji z wersją transkrypcji (14.11.2026)
+
+W CLI opcjonalnego adaptera istnieje osobna, prywatna warstwa szkicu edycji
+`videonotes-mobile-edit-draft-v2`. Polecenie `mobile-draft-init` tworzy szablon
+w nowym pliku JSON, ze sprawdzonym `project_id`, dokładnym SHA-256 bajtów
+wybranego `videonotes-export-v1` i pustą mapą `edits`. Użytkownik dopisuje
+lokalnie zmiany tekstu, po czym `mobile-patch-create` sprawdza zgodność
+fingerprintu przed publikacją paczki `videonotes-web-corrections-v1`.
+
+Starsze niepowiązane ze źródłem szkice v1 są odrzucane. Zapobiega to
+przepisaniu starej propozycji na nową transkrypcję tego samego projektu i
+segmentów. Żaden z tych kroków nie zmienia `transcript.json` ani
+`edits.json` desktopu. Przed zapisaniem nowej paczki sprawdzany jest ponownie
+SHA-256 źródła; jawne `--apply` na desktopie nadal ma własny odbiór konfliktów.
+Nie jest to jednak natywna aplikacja mobilna ani ochrona przed wrogim procesem
+równolegle zmieniającym plik już po ostatnim sprawdzeniu. MOB-01 i decyzja
+właściciela A/B/C pozostają nieodebrane.

@@ -6,10 +6,12 @@ from __future__ import annotations
 
 import contextlib
 import io
+import hashlib
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from videonotes.cli import main
 from videonotes.mobile_import import MOBILE_EDIT_DRAFT_SCHEMA
@@ -36,6 +38,7 @@ class MobileCliTest(unittest.TestCase):
         self.draft = {
             "schema": MOBILE_EDIT_DRAFT_SCHEMA,
             "project_id": self.document["project_id"],
+            "source_sha256": hashlib.sha256(self.source.read_bytes()).hexdigest(),
             "edits": {"s0": "PRIVATE_AFTER_72 nowa treść 😀"},
         }
         self.write_draft()
@@ -104,9 +107,9 @@ class MobileCliTest(unittest.TestCase):
 
     def test_duplicate_draft_fields_and_nonstandard_json_fail_closed(self):
         for invalid in (
-            b'{"schema":"videonotes-mobile-edit-draft-v1","schema":"other","project_id":"PRIVATE_PROJECT_71","edits":{}}',
-            b'{"schema":"videonotes-mobile-edit-draft-v1","project_id":"PRIVATE_PROJECT_71","edits":{"s0":"ok","s0":"bad"}}',
-            b'{"schema":"videonotes-mobile-edit-draft-v1","project_id":"PRIVATE_PROJECT_71","edits":{"s0":NaN}}',
+            b'{"schema":"videonotes-mobile-edit-draft-v2","schema":"other","project_id":"PRIVATE_PROJECT_71","edits":{}}',
+            b'{"schema":"videonotes-mobile-edit-draft-v2","project_id":"PRIVATE_PROJECT_71","edits":{"s0":"ok","s0":"bad"}}',
+            b'{"schema":"videonotes-mobile-edit-draft-v2","project_id":"PRIVATE_PROJECT_71","edits":{"s0":NaN}}',
             b"\xff",
         ):
             with self.subTest(payload=invalid[:32]):
@@ -157,6 +160,89 @@ class MobileCliTest(unittest.TestCase):
         status, output, error = self.execute("mobile-import-check", str(self.source))
         self.assertEqual(status, 2)
         self.assertFalse(output)
+        self.assertNotIn("Traceback", error)
+
+
+    def test_template_creation_is_source_bound_and_never_overwrites(self):
+        draft = self.source.parent / "created-draft.json"
+        initial = self.source.read_bytes()
+        status, out, err = self.execute(
+            "mobile-draft-init", "--source", str(self.source), "--output", str(draft),
+        )
+        self.assertEqual(status, 0, err)
+        self.assert_private_output(out)
+        self.assertEqual(len(json.loads(out)["draft_sha256"]), 64)
+        self.assertGreater(json.loads(out)["draft_bytes"], 0)
+        template = json.loads(draft.read_text("utf-8"))
+        self.assertEqual(template["schema"], MOBILE_EDIT_DRAFT_SCHEMA)
+        self.assertEqual(template["project_id"], self.document["project_id"])
+        self.assertEqual(template["source_sha256"], hashlib.sha256(initial).hexdigest())
+        self.assertEqual(template["edits"], {})
+        self.assertNotIn("PRIVATE_SOURCE_71", draft.read_text("utf-8"))
+        status, out, _ = self.execute(
+            "mobile-draft-init", "--source", str(self.source), "--output", str(draft),
+        )
+        self.assertEqual(status, 2)
+        self.assertFalse(out)
+        self.assertEqual(json.loads(draft.read_text("utf-8")), template)
+        template["edits"] = {"s0": "PRIVATE_AFTER_72 from template"}
+        draft.write_text(json.dumps(template), encoding="utf-8")
+        status, out, err = self.execute(
+            "mobile-patch-create", "--source", str(self.source),
+            "--edits", str(draft), "--output", str(self.patch),
+        )
+        self.assertEqual(status, 0, err)
+        self.assert_private_output(out)
+        self.assertEqual(self.source.read_bytes(), initial)
+
+    def test_stale_draft_rejected_even_when_project_and_segment_id_match(self):
+        self.document["segments"][0]["text"] = "PRIVATE_SOURCE_71 changed after draft"
+        self.source.write_text(json.dumps(self.document, ensure_ascii=False), encoding="utf-8")
+        status, output, error = self.execute(
+            "mobile-patch-create", "--source", str(self.source),
+            "--edits", str(self.edits), "--output", str(self.patch),
+        )
+        self.assertEqual(status, 2)
+        self.assertFalse(output)
+        self.assert_private_output(error)
+        self.assertFalse(self.patch.exists())
+
+    def test_old_unbound_v1_draft_fails_closed(self):
+        self.draft["schema"] = "videonotes-mobile-edit-draft-v1"
+        self.draft.pop("source_sha256")
+        self.write_draft()
+        status, output, error = self.execute(
+            "mobile-patch-create", "--source", str(self.source),
+            "--edits", str(self.edits), "--output", str(self.patch),
+        )
+        self.assertEqual(status, 2)
+        self.assertFalse(output)
+        self.assertNotIn("Traceback", error)
+        self.assertFalse(self.patch.exists())
+
+    def test_source_changed_during_creation_cannot_publish_patch(self):
+        import videonotes.cli as module
+        original = module.read_mobile_edit_draft_file
+        initial = self.source.read_bytes()
+
+        def simulate_source_mutation(*args, **kwargs):
+            result = original(*args, **kwargs)
+            self.document["segments"][0]["text"] = "CHANGED_SOURCE_BEFORE_PUBLICATION"
+            self.source.write_text(json.dumps(self.document, ensure_ascii=False), encoding="utf-8")
+            return result
+
+        with patch.object(module, "read_mobile_edit_draft_file",
+                          side_effect=simulate_source_mutation):
+            status, output, error = self.execute(
+                "mobile-patch-create", "--source", str(self.source),
+                "--edits", str(self.edits), "--output", str(self.patch),
+            )
+        self.assertEqual(status, 2)
+        self.assertFalse(output)
+        self.assertFalse(self.patch.exists())
+        self.assertNotEqual(self.source.read_bytes(), initial)
+        self.assertFalse(any(x.name.startswith(".vn-mobile-patch-")
+                             for x in self.source.parent.iterdir()))
         self.assertNotIn("Traceback", error)
 
 

@@ -12,7 +12,8 @@ from .exports import edit_segment, export_project
 from .web_corrections import import_web_corrections
 from .mobile_import import (
     import_portable_file, import_mobile_corrections_file,
-    export_mobile_corrections_file, read_mobile_edit_draft_file,
+    export_mobile_corrections_file, export_mobile_edit_draft_file,
+    read_mobile_edit_draft_file,
 )
 from .media import probe
 from .microphone import record_microphone, recording_status, list_microphone_devices, join_finished_recording
@@ -85,9 +86,12 @@ def parser() -> argparse.ArgumentParser:
     mobile_patch_check = sub.add_parser("mobile-patch-check", help="Sprawdź paczkę poprawek względem lokalnej transkrypcji; bez zapisu")
     mobile_patch_check.add_argument("--source", required=True, type=Path)
     mobile_patch_check.add_argument("--file", required=True, type=Path)
+    draft_init = sub.add_parser("mobile-draft-init", help="Utwórz lokalny szkic poprawek v2 powiązany z SHA-256 źródła")
+    draft_init.add_argument("--source", required=True, type=Path)
+    draft_init.add_argument("--output", required=True, type=Path)
     mobile_patch_create = sub.add_parser("mobile-patch-create", help="Utwórz lokalną paczkę poprawek bez nadpisania")
     mobile_patch_create.add_argument("--source", required=True, type=Path)
-    mobile_patch_create.add_argument("--edits", required=True, type=Path, help="Prywatny JSON videonotes-mobile-edit-draft-v1")
+    mobile_patch_create.add_argument("--edits", required=True, type=Path, help="Prywatny JSON videonotes-mobile-edit-draft-v2")
     mobile_patch_create.add_argument("--output", required=True, type=Path)
     edit = sub.add_parser("edit", help="Zapisz poprawkę segmentu, zachowując surową transkrypcję")
     edit.add_argument("project", type=Path)
@@ -374,18 +378,40 @@ def main(argv: list[str] | None = None) -> int:
                 "source_bytes": source["source_bytes"], "read_only": True,
             }, ensure_ascii=False))
         elif args.action == "mobile-patch-check":
-            doc = import_portable_file(args.source)["document"]
-            preview = import_mobile_corrections_file(doc, args.file)
+            source = import_portable_file(args.source)
+            preview = import_mobile_corrections_file(source["document"], args.file)
+            if import_portable_file(args.source)["source_sha256"] != source["source_sha256"]:
+                raise VideoNotesError("Transkrypcja źródłowa zmieniła się podczas sprawdzania.")
             print(json.dumps({
                 "schema": "videonotes-web-corrections-v1",
                 "changes": len(preview["changes"]),
                 "patch_sha256": preview["source_sha256"],
                 "patch_bytes": preview["source_bytes"], "read_only": True,
             }, ensure_ascii=False))
+        elif args.action == "mobile-draft-init":
+            source = import_portable_file(args.source)
+            report = export_mobile_edit_draft_file(
+                source["document"], source["source_sha256"], args.output,
+                verify_source=lambda: (
+                    import_portable_file(args.source)["source_sha256"] == source["source_sha256"]
+                ),
+            )
+            print(json.dumps({
+                "schema": "videonotes-mobile-edit-draft-v2",
+                "source_sha256": source["source_sha256"],
+                **report,
+            }, ensure_ascii=False))
         elif args.action == "mobile-patch-create":
-            doc = import_portable_file(args.source)["document"]
-            edits = read_mobile_edit_draft_file(doc, args.edits)
-            report = export_mobile_corrections_file(doc, edits, args.output)
+            source = import_portable_file(args.source)
+            edits = read_mobile_edit_draft_file(
+                source["document"], args.edits, source_sha256=source["source_sha256"],
+            )
+            report = export_mobile_corrections_file(
+                source["document"], edits, args.output,
+                verify_source=lambda: (
+                    import_portable_file(args.source)["source_sha256"] == source["source_sha256"]
+                ),
+            )
             print(json.dumps({
                 "schema": "videonotes-web-corrections-v1",
                 "submitted_edits": len(edits), **report,
