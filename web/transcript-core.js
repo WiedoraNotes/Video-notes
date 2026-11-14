@@ -55,7 +55,22 @@
       Object.getPrototypeOf(value) === null);
   }
   function validText(value, size) {
-    return typeof value === "string" && value.length <= size && !value.includes("\u0000");
+    if (typeof value !== "string" || value.length > size || value.includes("\u0000")) return false;
+    // JavaScript allows isolated UTF-16 surrogates in JSON strings, but Blob
+    // UTF-8 export silently replaces them with U+FFFD. Reject them to match
+    // Python's portable contract while still accepting genuine emoji pairs.
+    for (var i = 0; i < value.length; i++) {
+      var code = value.charCodeAt(i);
+      if (code >= 0xd800 && code <= 0xdbff) {
+        if (i + 1 >= value.length) return false;
+        var low = value.charCodeAt(i + 1);
+        if (low < 0xdc00 || low > 0xdfff) return false;
+        i += 1;
+      } else if (code >= 0xdc00 && code <= 0xdfff) {
+        return false;
+      }
+    }
+    return true;
   }
   function validTime(value) {
     return Number.isSafeInteger(value) && value >= 0 && value <= 24 * 3600 * 1000;
@@ -301,6 +316,7 @@
   }
   var core = {
     SCHEMA: SCHEMA, MAX_BYTES: MAX_BYTES, MAX_TEXT: MAX_TEXT, MAX_OUTPUT_BYTES: MAX_OUTPUT_BYTES, MAX_PATCH_BYTES: MAX_PATCH_BYTES,
+    validText: validText,
     parseExport: parseExport, validateExport: validateExport,
     clock: clock, corrected: corrected, renderExport: renderExport,
     renderExports: renderExports, renderCorrections: renderCorrections,
