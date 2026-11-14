@@ -171,6 +171,8 @@ class MobileCliTest(unittest.TestCase):
         )
         self.assertEqual(status, 0, err)
         self.assert_private_output(out)
+        self.assertEqual(len(json.loads(out)["draft_sha256"]), 64)
+        self.assertGreater(json.loads(out)["draft_bytes"], 0)
         template = json.loads(draft.read_text("utf-8"))
         self.assertEqual(template["schema"], MOBILE_EDIT_DRAFT_SCHEMA)
         self.assertEqual(template["project_id"], self.document["project_id"])
