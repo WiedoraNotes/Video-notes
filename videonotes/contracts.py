@@ -31,6 +31,11 @@ def valid_unicode_text(value: object) -> bool:
             and all(not 0xD800 <= ord(char) <= 0xDFFF for char in value))
 
 
+def utf16_code_units(value: str) -> int:
+    """Count portable JSON string length exactly like JavaScript .length."""
+    return sum(2 if ord(char) > 0xFFFF else 1 for char in value)
+
+
 def sha256_file(file: Path, *, block_bytes: int = 2 * 1024 * 1024) -> str:
     """Fingerprint large recordings without holding them in RAM."""
     digest = hashlib.sha256()
@@ -47,7 +52,7 @@ def _number(value: Any, label: str) -> int:
 
 
 def _text(value: Any, label: str, limit: int = MAX_TEXT_LENGTH) -> str:
-    if not valid_unicode_text(value) or len(value) > limit:
+    if not valid_unicode_text(value) or utf16_code_units(value) > limit:
         raise VideoNotesError(f"Nieprawidłowe pole {label}.")
     return value
 
@@ -55,7 +60,8 @@ def _text(value: Any, label: str, limit: int = MAX_TEXT_LENGTH) -> str:
 def validate_project(data: Any) -> dict[str, Any]:
     if not isinstance(data, dict) or data.get("schema") != PROJECT_SCHEMA:
         raise VideoNotesError("Nieobsługiwany format project.json.")
-    if not valid_unicode_text(data.get("id")) or not data["id"]:
+    if (not valid_unicode_text(data.get("id")) or not data["id"]
+            or utf16_code_units(data["id"]) > 128):
         raise VideoNotesError("Projekt nie ma identyfikatora.")
     source = data.get("source")
     processing = data.get("processing")
