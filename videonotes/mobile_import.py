@@ -16,6 +16,7 @@ from .mobile_contract import (
     _invalid_constant, _unique_keys,
     parse_portable_export, validate_portable_export,
 )
+from .stable_local_read import read_stable_local_json as _read_stable_file
 
 
 def import_portable_file(source: Path) -> dict:
