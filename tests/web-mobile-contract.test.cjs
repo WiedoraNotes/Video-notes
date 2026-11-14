@@ -95,6 +95,21 @@ test("browser and Python corrections reject isolated surrogate code units withou
   }
 });
 
+test("maximum portable text length counts UTF-16 units equally on Python and JS", () => {
+  const valid = documentFixture();
+  valid.segments[0].text = "😀".repeat(5000);
+  const json = JSON.stringify(valid);
+  const py = pythonParse(json);
+  assert.equal(py.status, 0, py.stderr);
+  const browser = core.parseExport(json);
+  assert.deepEqual(JSON.parse(py.stdout), browser);
+  assert.equal(browser.segments[0].text.length, 10000);
+  const over = {...valid, segments: valid.segments.map((row, i) =>
+    i === 0 ? {...row, text: "😀".repeat(5001)} : row)};
+  assert.throws(() => core.parseExport(JSON.stringify(over)));
+  assert.equal(pythonParse(JSON.stringify(over)).status, 2);
+});
+
 test("BOM-prefixed local UTF-8 export has identical Python and browser meaning", () => {
   const raw = String.fromCharCode(0xFEFF) + JSON.stringify(documentFixture());
   const browser = core.parseExport(raw);
