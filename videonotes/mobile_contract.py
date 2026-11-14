@@ -11,7 +11,7 @@ import re
 from typing import Any
 
 from .errors import VideoNotesError
-from .contracts import valid_unicode_text
+from .contracts import valid_unicode_text, utf16_code_units
 
 SCHEMA = "videonotes-export-v1"
 MAX_JSON_BYTES = 20 * 1024 * 1024
@@ -21,13 +21,8 @@ MAX_TIME_MS = 24 * 3600 * 1000
 _SEGMENT_ID = re.compile(r"[A-Za-z0-9_-]{1,60}\Z")
 
 
-def _utf16_units(value: str) -> int:
-    """Mirror JS string.length, including non-BMP text, without copying it."""
-    return sum(2 if ord(char) > 0xFFFF else 1 for char in value)
-
-
 def _text(value: Any, max_units: int) -> bool:
-    return valid_unicode_text(value) and _utf16_units(value) <= max_units
+    return valid_unicode_text(value) and utf16_code_units(value) <= max_units
 
 
 def _timestamp(value: Any) -> bool:
