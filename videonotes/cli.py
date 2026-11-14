@@ -11,6 +11,7 @@ from .errors import VideoNotesError
 from .exports import edit_segment, export_project
 from .web_corrections import import_web_corrections
 from .handoff_audit import audit_offline_handoff
+from .stable_local_read import read_stable_local_json
 from .mobile_import import (
     import_portable_file, import_mobile_corrections_file,
     export_mobile_corrections_file, export_mobile_edit_draft_file,
@@ -412,18 +413,24 @@ def main(argv: list[str] | None = None) -> int:
             }, ensure_ascii=False))
         elif args.action == "mobile-patch-create":
             source = import_portable_file(args.source)
-            edits = read_mobile_edit_draft_file(
+            edits, draft_sha256 = read_mobile_edit_draft_file(
                 source["document"], args.edits, source_sha256=source["source_sha256"],
+                include_digest=True,
             )
+            # Both files are untrusted mutable local inputs. Even if the
+            # transcript stays intact, never publish an older correction when
+            # the author edited or replaced the draft during patch creation.
             report = export_mobile_corrections_file(
                 source["document"], edits, args.output,
                 verify_source=lambda: (
                     import_portable_file(args.source)["source_sha256"] == source["source_sha256"]
+                    and read_stable_local_json(args.edits)[1] == draft_sha256
                 ),
             )
             print(json.dumps({
                 "schema": "videonotes-web-corrections-v1",
-                "submitted_edits": len(edits), **report,
+                "submitted_edits": len(edits), "draft_sha256": draft_sha256,
+                **report,
             }, ensure_ascii=False))
         elif args.action == "status":
             project, transcript, edits = read_project(args.project)
