@@ -166,3 +166,23 @@ Work / tester: tylko brakujący odbiór realnego GGUF i naturalnego audio, fizyc
 `videonotes/mobile_corrections.py` zawiera `render_mobile_corrections(document, edits) -> bytes` i `parse_mobile_corrections(document, payload) -> dict`. Korzysta z istniejącego odwracalnego `videonotes-web-corrections-v1`; sprawdza oryginalny tekst (`before`), ID segmentu i czasy, limit 20 MiB, JSON i kompletność wszystkich zmian przed ich zwróceniem. Jest to warstwa pamięciowa: nie zapisuje projektu ani nie nakłada zmian bez decyzji użytkownika. Import eksportu i stworzenie paczki poprawek można testować bez urządzeń mobilnych; konkretna aplikacja Android/iOS nadal zależy od VN-08-01.
 
 Test `tests/test_mobile_corrections.py` kontroluje źródła, brak zapisu, niejednoznaczne pola i konflikty; `tests/web-mobile-contract.test.cjs` sprawdza dwustronne przyjęcie paczki przez walidator Python i faktyczny kod JS przeglądarki. Nadal trzeba zweryfikować urządzenia i zatwierdzić zakres mobilnego MVP.
+
+## Odmowa publikacji przy zmianie szkicu poprawek (14.11.2026)
+
+Przy `mobile-patch-create` wersja bazowa sprawdzała tuż przed
+publikacją SHA transkrypcji, lecz edytowalny szkic `--edits` mógł
+zostać w tym czasie zmieniony przez drugie okno. Pozwalało to utworzyć
+prawidłową paczkę ze **starszej** wersji poprawek bez ostrzeżenia.
+
+Teraz parser pobiera SHA-256 dokładnie tych bajtów szkicu, z których
+utworzył zwalidowaną mapę zmian. Po przygotowaniu pliku tymczasowego,
+a przed jego publikacją bez nadpisania, ponownie sprawdza **oba**
+lokalne wejścia: SHA transkrypcji i SHA szkicu poprawek. Zmiana
+któregokolwiek przerywa pracę. SHA samego szkicu pozostaje wewnętrzny
+(nie trafia do standardowego raportu CLI). Test regresyjny celowo
+zmienia prywatny szkic na dane o tej samej liczbie bajtów, zachowując
+wcześniejszy czas modyfikacji; sprawdza brak docelowego patcha oraz
+brak plików tymczasowych. Jest to ochrona przed kolizją w trakcie
+uruchomienia, nie atomowa blokada pliku przed obcym zapisem po wyjściu.
+
+Nie zastępuje to odbioru aplikacji Android/iOS na prawdziwych urządzeniach.
