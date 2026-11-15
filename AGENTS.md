@@ -1,12 +1,14 @@
 # Zasady pracy w repozytorium Video Notes
 
+> **DECYZJA WŁAŚCICIELA 16.11.2026 — GŁÓWNE REPOZYTORIUM KWN ORAZ MIEJSCE TESTÓW PRAKTYCZNYCH.** Repozytorium `WiedoraNotes/Video-notes` (https://github.com/WiedoraNotes/Video-notes) jest jedynym głównym repozytorium rozwoju modułu KWN / Video Notes: kodu, dokumentacji, testów programistycznych, gałęzi i pull requestów. `wiedoraWeb/Constant_app` (https://github.com/wiedoraWeb/Constant_app) jest docelowym repozytorium platformy Wiedora, do której integrowane będą gotowe wersje KWN i gdzie będą prowadzone praktyczne testy działania modułu. Oba repozytoria posiadają gałąź `develop`. Nie traktować `wiedoraWeb/Constant_app` jako głównego miejsca implementacji silnika KWN. Dawne ścieżki `testowyemailaplikacja-spec/Video-notes` i `testowyemailaplikacja-spec/Constant_app` mają charakter historyczny. Samo ustalenie środowiska docelowego nie jest potwierdzeniem ukończenia integracji ani testów; ich wykonanie i odbiór wymagają odrębnych, rzeczywistych działań. Nie przenosić historii testów ani statusów między repozytoriami bez weryfikacji.
+
 1. **Video Notes to samodzielna aplikacja transkrypcji i opracowywania notatek.** Wzorcem jest `apps/notatki/` Wiedora. **Konwerter plików to osobny projekt**, nie realizujemy jego funkcji w Video Notes.
 2. Hierarchia: aktualne polecenie użytkownika → ten plik → `docs/PLAN_ROZWOJU_VIDEO_NOTES.md` → rzeczywisty kod/testy.
 3. `reference/wiedora-notatki/` zawiera **wyłącznie migawkę źródeł do analizy**; nie traktuj jej jako działającego programu Windows. Nowy silnik i UI implementuj poza `reference/`.
 4. Kolejność: VN-00 fundamenty → VN-01 OBS/transkrypcja → VN-02 notatki podstawowe → VN-03 zaawansowane → VN-04 mikrofon → VN-05 inne źródła → VN-06 wydanie Windows → VN-07 integracja Wiedora → VN-08 mobilne.
 5. Program Windows: offline po pełnej instalacji, bez obowiązkowego konta, płatnego API i automatycznej wysyłki materiałów. Pliki, transkrypcje i notatki zostają lokalne.
 6. Wydziel silnik ASR, import/OBS, sesje nagrywania, modele notatek, zapis lokalny, eksport i GUI. Przygotuj stabilny kontrakt danych dla przyszłego adaptera WWW.
-7. W istniejącym repo `Constant_app`, Supabase, Netlify i danych użytkowników **niczego nie zmieniaj** bez osobnego zadania.
+7. Integrację gotowych zmian KWN z `wiedoraWeb/Constant_app`, testy praktyczne, Netlify i ewentualne operacje Supabase wykonuj w ramach właściwych zleceń, z kontrolą ryzyka; sama praca nad silnikiem KWN nie uprawnia do przypadkowych zmian hosta lub danych użytkowników.
 8. Nie deklaruj przetestowania ani ukończenia funkcji bez wyników testów. Przy zmianie kodu sprawdź błędy, regresję i realne scenariusze, a przy wydaniu sprzęt Windows.
 9. Nie przenoś do publicznego repo sekretów, danych użytkowników ani prywatnych konfiguracji. Pilnuj licencji modeli i zależności.
 10. Nie nadpisuj cudzej równoległej pracy. Przed aktualizacją pobierz najnowszy plik i zweryfikuj stan gałęzi.
