@@ -313,3 +313,21 @@ test("timestamp lookup supports 50k items without scanning the entire source", (
   }
   assert.equal(core.locateAtTime(rows, 49999 * 1500), 49999);
 });
+
+test("direct browser-core imports enforce 20 MiB of actual UTF-8 bytes, not UTF-16 length", () => {
+  const inflated = "ą".repeat(10 * 1024 * 1024);
+  const source = JSON.stringify({...fixture(), ignoredMetadata: inflated});
+  assert.ok(source.length < core.MAX_BYTES, "UTF-16 source should fit old (incorrect) length guard");
+  assert.ok(Buffer.byteLength(source, "utf8") > core.MAX_BYTES, "actual UTF-8 exceeds cap");
+  assert.throws(() => core.parseExport(source), /zbyt duży/);
+  const patch = JSON.stringify({...JSON.parse(core.renderCorrections(fixture(), {})), ignoredMetadata: inflated});
+  assert.ok(patch.length < core.MAX_PATCH_BYTES);
+  assert.ok(Buffer.byteLength(patch, "utf8") > core.MAX_PATCH_BYTES);
+  assert.throws(() => core.parseCorrections(fixture(), patch), /20 MiB/);
+  // A valid Polish transcript and saved patch still round-trip unchanged.
+  const small = fixture();
+  small.segments[0].text = "Zażółć gęślą jaźń 😀";
+  assert.deepEqual(core.parseExport(JSON.stringify(small)), small);
+  const corrections = core.renderCorrections(small, {[small.segments[0].id]: "Korekta łóżko"});
+  assert.equal(core.parseCorrections(small, corrections)[small.segments[0].id], "Korekta łóżko");
+});
