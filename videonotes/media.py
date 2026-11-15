@@ -9,6 +9,7 @@ import tempfile
 import wave
 from pathlib import Path
 
+from .contracts import utf16_code_units, valid_unicode_text
 from .errors import VideoNotesError
 
 SUPPORTED_SOURCE_SUFFIXES = {".mp4", ".mkv", ".webm", ".mov", ".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus"}
@@ -52,8 +53,13 @@ def _run(args: list[str], *, timeout: int = 120) -> subprocess.CompletedProcess[
             data = stdout_file.read(MAX_TOOL_STDOUT_BYTES + 1)
         if len(data) > MAX_TOOL_STDOUT_BYTES:
             raise VideoNotesError("Dane wyjściowe narzędzia FFmpeg/FFprobe przekroczyły limit bezpieczeństwa.")
-        return subprocess.CompletedProcess(args, result.returncode,
-                                           data.decode("utf-8", errors="replace"), "")
+        # FFprobe JSON and diagnostics are text. Replacement characters would
+        # silently change audio-track titles and source metadata.
+        try:
+            content = data.decode("utf-8", errors="strict")
+        except UnicodeError as error:
+            raise VideoNotesError("Lokalne narzędzie zwróciło niepoprawnie zakodowany tekst UTF-8.") from error
+        return subprocess.CompletedProcess(args, result.returncode, content, "")
     except FileNotFoundError as err:
         raise VideoNotesError("Brakuje wymaganego lokalnego programu.") from err
     except subprocess.TimeoutExpired as err:
@@ -111,14 +117,14 @@ def probe(source: Path, ffprobe: str = "ffprobe") -> dict:
                 raise ValueError("invalid stream tags")
             labels = (item.get("codec_name") or "unknown",
                       tags.get("language") or "", tags.get("title") or "")
-            if any(not isinstance(value, str) or len(value) > MAX_STREAM_LABEL or "\x00" in value
+            if any(not valid_unicode_text(value) or utf16_code_units(value) > MAX_STREAM_LABEL
                    for value in labels):
                 raise ValueError("invalid stream metadata")
             codec, language, title = labels
             streams.append({"index": index, "codec": codec, "channels": channels,
                             "language": language, "title": title})
             indices.add(index)
-    except (ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
+    except (ValueError, TypeError, KeyError, RecursionError, OverflowError, json.JSONDecodeError) as error:
         raise VideoNotesError("FFprobe nie rozpoznał czasu lub ścieżek audio.") from error
     if not streams:
         raise VideoNotesError("Nagranie nie zawiera ścieżki dźwiękowej.")
