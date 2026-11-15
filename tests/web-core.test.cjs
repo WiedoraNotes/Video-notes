@@ -341,7 +341,7 @@ test("browser parser refuses deeply nested JSON before allocation and preserves 
   )};
   assert.throws(() => core.parseExport(JSON.stringify(hugeMetadata)), /Zbyt głęboki JSON/);
   const quoted = fixture();
-  quoted.segments[0].text = "Słownie [[[[[[ i {{{{ oraz \\" } : [ bez nowej struktury";
+  quoted.segments[0].text = 'Słownie [[[[[[ i {{{{ oraz " } : [ bez nowej struktury';
   assert.deepEqual(core.parseExport(JSON.stringify(quoted)), quoted);
   const patch = core.renderCorrections(quoted, {[quoted.segments[0].id]: "W tekście są [[[ i {{{"});
   assert.equal(core.parseCorrections(quoted, patch)[quoted.segments[0].id], "W tekście są [[[ i {{{");
