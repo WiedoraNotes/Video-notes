@@ -5,8 +5,10 @@ import json
 import tempfile
 from pathlib import Path
 
+from .contracts import MAX_TEXT_LENGTH, utf16_code_units, valid_unicode_text
 from .errors import VideoNotesError
 from .media import _run, executable
+from .stable_local_read import read_stable_local_json
 
 MAX_ASR_JSON_BYTES = 32 * 1024 * 1024
 
@@ -21,7 +23,15 @@ def _unique_json_object(pairs: list[tuple[str, object]]) -> dict:
     return result
 
 
+def _reject_json_constant(value: str) -> None:
+    raise VideoNotesError("Silnik ASR zwrócił niedozwoloną wartość liczbową.")
+
+
 def parse_whisper_output(payload: object, *, offset_ms: int, duration_ms: int) -> list[dict]:
+    if (type(offset_ms) is not int or type(duration_ms) is not int
+            or offset_ms < 0 or duration_ms <= 0
+            or offset_ms + duration_ms > 24 * 3600 * 1000):
+        raise VideoNotesError("Nieprawidłowy czas fragmentu ASR.")
     if not isinstance(payload, dict) or not isinstance(payload.get("transcription"), list):
         raise VideoNotesError("Silnik ASR zwrócił nieprawidłowy JSON.")
     if len(payload["transcription"]) > 100_000:
@@ -33,10 +43,13 @@ def parse_whisper_output(payload: object, *, offset_ms: int, duration_ms: int) -
             raise VideoNotesError("Nieprawidłowy segment ASR.")
         raw = entry.get("text")
         offsets = entry.get("offsets")
-        if not isinstance(raw, str) or not isinstance(offsets, dict) or not raw.strip():
-            if isinstance(raw, str) and not raw.strip() and isinstance(offsets, dict):
-                continue
+        if not isinstance(raw, str) or not isinstance(offsets, dict):
             raise VideoNotesError("Brakuje tekstu lub czasu w wyniku ASR.")
+        text = raw.strip()
+        if not text:
+            continue  # Silent fragment: leave checkpoint and progress untouched.
+        if not valid_unicode_text(text) or utf16_code_units(text) > MAX_TEXT_LENGTH:
+            raise VideoNotesError("Silnik ASR zwrócił tekst poza limitem lub błędny Unicode.")
         start, end = offsets.get("from"), offsets.get("to")
         if type(start) is not int or type(end) is not int or start < 0 or end <= start or end > duration_ms + 500:
             raise VideoNotesError("Silnik ASR zwrócił nieprawidłowy czas segmentu.")
@@ -46,7 +59,7 @@ def parse_whisper_output(payload: object, *, offset_ms: int, duration_ms: int) -
             raise VideoNotesError("Segment ASR wychodzi poza granice nagrania.")
         # Only exact same text AND time is a duplicate. Repeated speech at
         # distinct timestamps is legitimate and must not disappear.
-        key = (absolute_start, absolute_end, raw.strip())
+        key = (absolute_start, absolute_end, text)
         if key in seen:
             continue
         seen.add(key)
@@ -73,13 +86,14 @@ class WhisperCpp:
                 file = Path(output + ".json")
                 if file.is_symlink() or not file.is_file():
                     raise VideoNotesError("Silnik ASR zwrócił niedozwolony plik JSON.")
-                # A growing file can bypass a stat-size check. Bound the
-                # actual read and reject ambiguous duplicate JSON keys.
-                with file.open("rb") as reader:
-                    raw = reader.read(MAX_ASR_JSON_BYTES + 1)
-                if len(raw) > MAX_ASR_JSON_BYTES or file.is_symlink():
-                    raise VideoNotesError("Silnik ASR zwrócił zbyt duży JSON.")
-                payload = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_json_object)
-            except (FileNotFoundError, OSError, UnicodeError, ValueError) as error:
+                # Verify the same descriptor twice (SHA-256 and inode/mtime).
+                # A second writer or a replaced output must not be checkpointed.
+                raw, _digest = read_stable_local_json(file, max_bytes=MAX_ASR_JSON_BYTES)
+                payload = json.loads(raw.decode("utf-8"),
+                                     object_pairs_hook=_unique_json_object,
+                                     parse_constant=_reject_json_constant)
+            except (FileNotFoundError, OSError, UnicodeError, ValueError,
+                    RecursionError, OverflowError) as error:
+                # Never echo model output or machine-local paths in an error.
                 raise VideoNotesError("Nie można odczytać wynikowego JSON silnika ASR.") from error
         return parse_whisper_output(payload, offset_ms=offset_ms, duration_ms=duration_ms)
