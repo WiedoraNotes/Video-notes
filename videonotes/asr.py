@@ -8,9 +8,7 @@ from pathlib import Path
 from .contracts import MAX_TEXT_LENGTH, utf16_code_units, valid_unicode_text
 from .errors import VideoNotesError
 from .media import _run, executable
-from .stable_local_read import read_stable_local_json
-
-MAX_ASR_JSON_BYTES = 32 * 1024 * 1024
+from .stable_local_read import MAX_ASR_JSON_BYTES, read_stable_local_json
 
 
 def _unique_json_object(pairs: list[tuple[str, object]]) -> dict:
