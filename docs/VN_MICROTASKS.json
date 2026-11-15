@@ -537,7 +537,7 @@
         "https://github.com/testowyemailaplikacja-spec/Constant_app/pull/189",
         "https://github.com/testowyemailaplikacja-spec/Constant_app/pull/246"
       ],
-      "acceptance_note": "Beta merged/deployed on develop with host smoke and unchanged main; formal HOST-01 remains blocked by VN-07-03 and VN-06-04 plus GitHub full-regression runner and human evidence. 15.11 hostowy draft PR #246 przygotowuje synchronizację źródła VN-07 do Wiedory (w obu JS potwierdzono identyczny kod upstream), lecz host GitHub Actions run 43672684828 attempts 1 i 2 zakończyły się failure przed startem runnerów (0 steps). Brak pełnych verify/verify:full, merge i nowego Netlify deploy. PR pozostaje Draft, HOST-01 NOT_RUN."
+      "acceptance_note": "Beta merged/deployed on develop with host smoke and unchanged main; formal HOST-01 remains blocked by VN-07-03 and VN-06-04 plus GitHub full-regression runner and human evidence. 15.11 hostowy draft PR #246 przygotowuje synchronizację źródła VN-07 do Wiedory (w obu JS potwierdzono identyczny kod upstream), lecz host GitHub Actions run 43672684828 attempts 1 i 2 zakończyły się failure przed startem runnerów (0 steps). Brak pełnych verify/verify:full, merge i nowego Netlify deploy. PR pozostaje Draft, HOST-01 NOT_RUN. 15.11: API potwierdza, że Constant_app jest repo prywatnym, a Video-notes publicznym. W prywatnym hoście wielokrotne GitHub Actions kończą się przed runnerem (0 steps), przy poprawnie działającym publicznym CI KWN; limity/billing minut to hipoteza bez potwierdzenia panelu operatora. PR Constant_app #246 pozostaje draft, no green host verification, no new deploy; HOST-01 NOT_RUN."
     },
     {
       "id": "VN-08-01",
