@@ -100,7 +100,7 @@ def command_runner(command: list[str], extra_env: dict[str, str], timeout: int) 
 
 def parse_node_major(output: bytes) -> int | None:
     """Accept only a short, well-formed Node semantic version."""
-    match = re.fullmatch(rb"v([0-9]{1,3})[.][0-9]{1,3}[.][0-9]{1,3}\\s*", output)
+    match = re.fullmatch(rb"v([0-9]{1,3})[.][0-9]{1,3}[.][0-9]{1,3}\s*", output)
     return int(match.group(1)) if match else None
 
 
