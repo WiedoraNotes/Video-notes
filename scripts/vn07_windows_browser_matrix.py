@@ -10,10 +10,12 @@ import argparse
 import json
 import os
 import re
+import secrets
 import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -61,14 +63,38 @@ def browser_executable(name: str, supplied: str | None = None) -> str | None:
 
 
 def command_runner(command: list[str], extra_env: dict[str, str], timeout: int) -> int:
-    """Run synthetic scripts, discarding output to avoid private diagnostic leaks."""
-    environment = os.environ.copy()
-    environment.update(extra_env)
-    completed = subprocess.run(command, cwd=ROOT, env=environment,
-                               stdin=subprocess.DEVNULL,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                               timeout=timeout, check=False)
-    return completed.returncode
+    """Require a fresh nonce-bound receipt from the actual synthetic script.
+
+    The executed program cannot claim success just by returning exit code zero.
+    A clean, private, short-lived directory ensures the receipt does not persist.
+    This is evidence of the *automated* scenario only, never a human PASS.
+    """
+    scenario = Path(command[1]).name
+    if scenario not in {"browser-smoke.cjs", "firefox-smoke.cjs"}:
+        raise ValueError("Unrecognized local browser smoke script")
+    with tempfile.TemporaryDirectory(prefix="vn07-browser-proof-") as directory:
+        receipt = Path(directory) / "receipt.json"
+        nonce = secrets.token_hex(16)
+        environment = os.environ.copy()
+        environment.update(extra_env)
+        environment.update({"KWN_MATRIX_RECEIPT": str(receipt),
+                            "KWN_MATRIX_NONCE": nonce})
+        completed = subprocess.run(command, cwd=ROOT, env=environment,
+                                   stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                   timeout=timeout, check=False)
+        if completed.returncode != 0:
+            return completed.returncode
+        try:
+            metadata = receipt.lstat()
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 4096:
+                return 77
+            payload = json.loads(receipt.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
+            return 77
+        expected = {"schema": "videonotes-vn07-browser-receipt-v1",
+                    "scenario": scenario, "nonce": nonce, "synthetic_only": True}
+        return 0 if payload == expected else 77
 
 
 def run_matrix(programs: dict[str, str | None],
