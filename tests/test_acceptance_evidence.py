@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.vn_acceptance_evidence import CASES, empty_template, evaluate, validate
+from scripts.vn_acceptance_evidence import CASES, empty_template, evaluate, load_private_evidence, validate
 
 
 class ManualAcceptanceTests(unittest.TestCase):
@@ -136,6 +136,46 @@ class ManualAcceptanceTests(unittest.TestCase):
         report = evaluate({"schema": "videonotes-manual-evidence-v1", "entries": [a]})
         self.assertFalse(report["valid"])
         self.assertGreaterEqual(len(report["errors"]), 2)
+
+    def test_duplicate_json_fields_cannot_turn_a_failure_into_a_pass(self):
+        script = Path(__file__).resolve().parents[1] / "scripts" / "vn_acceptance_evidence.py"
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "evidence.json"
+            row = self.make_pass("WEB-01", "PHYSICAL_WINDOWS")
+            valid = {"schema": "videonotes-manual-evidence-v1", "entries": [row]}
+            text = __import__("json").dumps(valid)
+            duplicates = [
+                text.replace('"result": "PASS"', '"result": "FAIL", "result": "PASS"'),
+                text.replace('"schema": "videonotes-manual-evidence-v1"',
+                             '"schema": "bogus", "schema": "videonotes-manual-evidence-v1"'),
+                text.replace('"result": "PASS"', '"res\\u0075lt": "FAIL", "result": "PASS"'),
+            ]
+            for document in duplicates:
+                path.write_text(document, encoding="utf-8")
+                with self.subTest(document=document[:65]):
+                    with self.assertRaises(ValueError):
+                        load_private_evidence(path)
+                    result = subprocess.run([sys.executable, str(script), "--check", str(path)],
+                                            capture_output=True, text=True, check=False)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertNotIn("SELF_REPORTED_PASS", result.stdout)
+
+    def test_private_evidence_reader_refuses_symlink_and_non_finite_json(self):
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / "real.json"
+            target.write_text(__import__("json").dumps(empty_template()), encoding="utf-8")
+            self.assertTrue(isinstance(load_private_evidence(target), dict))
+            target.write_bytes(b'{"schema":NaN,"entries":[]}')
+            with self.assertRaises(ValueError):
+                load_private_evidence(target)
+            target.write_text(__import__("json").dumps(empty_template()), encoding="utf-8")
+            link = Path(temp) / "linked.json"
+            try:
+                link.symlink_to(target)
+            except (OSError, NotImplementedError):
+                self.skipTest("Test system does not permit symlinks")
+            with self.assertRaises(ValueError):
+                load_private_evidence(link)
 
 
 if __name__ == "__main__":
