@@ -57,3 +57,21 @@ python scripts/vn_acceptance_evidence.py --check C:\KWN-VN07-EVIDENCE.json
 Po **realnym** teście wpisz datę, rzeczywisty SHA `develop`, identyfikator WEB-01/WEB-02/HOST-01, wyniki i wyłącznie link do zanonimizowanych metadanych. Nie zapisuj w tym pliku nazwisk, ścieżek nagrań, transkrypcji ani loginów. Walidator nie sprawdza autentyczności człowieka ani urządzenia; `SELF_REPORTED_PASS` wymaga niezależnej weryfikacji i **nie zamyka automatycznie VN-07 ani WEB-01/02/HOST-01**.
 
 Dokładne definicje formalnych bramek: [VN_HARDWARE_ACCEPTANCE_20261107.md](VN_HARDWARE_ACCEPTANCE_20261107.md) i [VN_MANUAL_EVIDENCE.md](VN_MANUAL_EVIDENCE.md).
+
+## 6. Jedno polecenie dla automatycznej części Chrome, Edge i Firefox na Windows
+
+Na fizycznym Windows z **Node.js 22** i lokalnym `geckodriver` uruchom w **czystej** kopii gałęzi `develop`:
+
+```powershell
+python scripts/vn07_windows_browser_matrix.py --output C:\KWN-VN07-AUTOMATED.json
+```
+
+Skrypt sam wyszukuje istniejące instalacje Chrome, Edge, Firefox, Node i geckodriver. Jeżeli przeglądarki nie znajdują się w typowych lokalizacjach, podaj jawne ścieżki:
+
+```powershell
+python scripts/vn07_windows_browser_matrix.py --output C:\KWN-VN07-AUTOMATED-2.json --chrome "C:\Program Files\Google\Chrome\Application\chrome.exe" --edge "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --firefox "C:\Program Files\Mozilla Firefox\firefox.exe" --geckodriver "C:\Tools\geckodriver.exe"
+```
+
+Każdy przebieg wymaga **nowego pliku wyjściowego**; istniejący nigdy nie jest nadpisywany. Wykorzystuje istniejące testy `scripts/browser-smoke.cjs` i `scripts/firefox-smoke.cjs`: prawdziwe lokalne `file://`, syntetyczne importy i 50 tys. wypowiedzi, edycja, eksport oraz kontrola braku HTTP(S) inicjowanego przez stronę. W raporcie pojawia się `AUTOMATED_PASS`, `AUTOMATED_FAIL` albo `NOT_RUN`, bez prywatnych ścieżek, danych konta, treści dokumentów ani identyfikatora komputera. Brak narzędzia oznacza `NOT_RUN`. Zastosowano limit czasu 240 sekund na przeglądarkę i nie uruchamia się płatnych usług ani automatycznych instalacji.
+
+**Ważne:** to nie jest zamiennik ręcznej próby klawiatury, NVDA, rzeczywistego odłączenia sieci, pełnego pomiaru pamięci ani oceny czytelnika. Raport celowo zawiera `manual_web01: NOT_RUN`, `manual_web02: NOT_RUN`, `nvda_human_review: NOT_RUN`, `hardware_attested: false`, `stage_status_updated: false`. Tylko niezależnie zweryfikowane dane z fizycznego stanowiska mogą później posłużyć do formalnego odbioru. Zmiana kodu automatyzacji nie zmienia statusu żadnego etapu.
