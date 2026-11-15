@@ -12,16 +12,20 @@ from pathlib import Path
 from .errors import VideoNotesError
 
 MAX_JSON_BYTES = 20 * 1024 * 1024
+MAX_ASR_JSON_BYTES = 32 * 1024 * 1024
 READ_SIZE = 64 * 1024
 
 
-def read_stable_local_json(source: Path) -> tuple[bytes, str]:
-    """Read at most 20 MiB from one regular file and reject concurrent edits.
+def read_stable_local_json(source: Path, *, max_bytes: int = MAX_JSON_BYTES) -> tuple[bytes, str]:
+    """Read a bounded regular file, rejecting concurrent edits/replacements.
 
     Re-read the same file descriptor using SHA-256 to detect same-size edits
     on coarse-timestamp Windows filesystems. Verify original path identity.
     The digest describes exactly the bytes returned for later parsing.
     """
+    if (type(max_bytes) is not int or not 0 < max_bytes <= MAX_ASR_JSON_BYTES):
+        raise VideoNotesError("Nieprawidłowy limit odczytu lokalnego JSON.")
+    limit = f"{max_bytes // (1024 * 1024)} MiB" if max_bytes % (1024 * 1024) == 0 else "ustalony limit"
     path = Path(source).expanduser()
     if path.is_symlink():
         raise VideoNotesError("Import nie pozwala na dowiązania symboliczne.")
@@ -30,18 +34,18 @@ def read_stable_local_json(source: Path) -> tuple[bytes, str]:
         fd = os.open(path, flags)
         try:
             before = os.fstat(fd)
-            if not stat.S_ISREG(before.st_mode) or before.st_size > MAX_JSON_BYTES:
-                raise VideoNotesError("Wymagany jest zwykły plik JSON do 20 MiB.")
+            if not stat.S_ISREG(before.st_mode) or before.st_size > max_bytes:
+                raise VideoNotesError(f"Wymagany jest zwykły plik JSON do {limit}.")
             contents = bytearray()
             digest = hashlib.sha256()
             while True:
-                block = os.read(fd, min(READ_SIZE, MAX_JSON_BYTES + 1 - len(contents)))
+                block = os.read(fd, min(READ_SIZE, max_bytes + 1 - len(contents)))
                 if not block:
                     break
                 contents.extend(block)
                 digest.update(block)
-                if len(contents) > MAX_JSON_BYTES:
-                    raise VideoNotesError("Eksport przekracza limit 20 MiB.")
+                if len(contents) > max_bytes:
+                    raise VideoNotesError(f"Plik JSON przekracza limit {limit}.")
             # Some Windows filesystems coarsen timestamps. Read the bounded
             # descriptor a second time and compare bytes via SHA-256 even when
             # the file metadata appears unchanged after an in-place rewrite.
@@ -49,13 +53,13 @@ def read_stable_local_json(source: Path) -> tuple[bytes, str]:
             verify = hashlib.sha256()
             verified_bytes = 0
             while True:
-                block = os.read(fd, min(READ_SIZE, MAX_JSON_BYTES + 1 - verified_bytes))
+                block = os.read(fd, min(READ_SIZE, max_bytes + 1 - verified_bytes))
                 if not block:
                     break
                 verify.update(block)
                 verified_bytes += len(block)
-                if verified_bytes > MAX_JSON_BYTES:
-                    raise VideoNotesError("Eksport przekracza limit 20 MiB.")
+                if verified_bytes > max_bytes:
+                    raise VideoNotesError(f"Plik JSON przekracza limit {limit}.")
             if verified_bytes != len(contents) or verify.digest() != digest.digest():
                 raise VideoNotesError("Zawartość pliku zmieniła się podczas importu.")
             after = os.fstat(fd)
