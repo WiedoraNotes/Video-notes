@@ -4,6 +4,7 @@ import shutil
 import sys
 import subprocess
 import tempfile
+import time
 import unittest
 import wave
 from pathlib import Path
@@ -84,6 +85,35 @@ class OfflineFFmpegProcessSafetyTest(unittest.TestCase):
                      "import sys;sys.stderr.write('SECRET\\n');print('READY')"], timeout=15)
         self.assertEqual(proc.stdout.strip(), "READY")
         self.assertEqual(proc.stderr, "")
+
+
+    def test_stdout_overflow_terminates_before_sleeping_child_finishes(self):
+        started = time.monotonic()
+        with self.assertRaisesRegex(VideoNotesError, "przekroczyły limit") as error:
+            _run([sys.executable, "-c",
+                  "import sys,time;sys.stdout.buffer.write(b'PRIVATE'*500000);"
+                  "sys.stdout.flush();time.sleep(10)"], timeout=12)
+        elapsed = time.monotonic() - started
+        # Original TemporaryFile spooling allowed the child to sleep for all
+        # 10 seconds and only checked the 2 MiB limit *after* it exited.
+        self.assertLess(elapsed, 8.0)
+        self.assertNotIn("PRIVATE", str(error.exception))
+
+    def test_stdout_exact_bound_is_allowed_without_disk_spool(self):
+        from videonotes.media import MAX_TOOL_STDOUT_BYTES
+        result = _run([sys.executable, "-c",
+                       "import sys;sys.stdout.buffer.write(b'A'*" +
+                       str(MAX_TOOL_STDOUT_BYTES) + ")"], timeout=15)
+        self.assertEqual(len(result.stdout), MAX_TOOL_STDOUT_BYTES)
+        self.assertEqual(result.stdout[:3], "AAA")
+        self.assertEqual(result.stderr, "")
+
+    def test_subprocess_timeout_stops_sleeping_child_and_keeps_paths_private(self):
+        started = time.monotonic()
+        with self.assertRaisesRegex(VideoNotesError, "Przekroczono czas") as error:
+            _run([sys.executable, "-c", "import time;time.sleep(12)"], timeout=0.5)
+        self.assertLess(time.monotonic() - started, 8.0)
+        self.assertNotIn(str(Path.cwd()), str(error.exception))
 
     def test_nonzero_exit_does_not_reveal_stdout_or_stderr(self):
         with self.assertRaisesRegex(VideoNotesError, "zgłosiło błąd") as issue:
