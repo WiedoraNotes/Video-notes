@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import shutil
 import subprocess
-import tempfile
+import threading
+import time
 import wave
 from pathlib import Path
 
@@ -42,33 +44,99 @@ def _unique_probe_keys(pairs: list[tuple[str, object]]) -> dict:
 
 
 def _run(args: list[str], *, timeout: int = 120) -> subprocess.CompletedProcess[str]:
-    """Spool stdout to disk; never buffer unbounded or private process logs."""
+    """Run a local tool with a strict *streaming* stdout bound.
+
+    The old TemporaryFile spool consumed arbitrary disk space before checking
+    MAX_TOOL_STDOUT_BYTES. A child that writes endlessly must be stopped as soon
+    as its output exceeds 2 MiB, not when it exits or fills the user's disk.
+    No shell, child stderr, private logs, network or unbounded memory.
+    """
+    if (isinstance(timeout, bool) or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout) or timeout <= 0):
+        raise VideoNotesError("Nieprawidłowy limit czasu lokalnego narzędzia.")
+    launch = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+              if os.name == "nt" else {"start_new_session": True})
     try:
-        with tempfile.TemporaryFile(mode="w+b") as stdout_file:
-            result = subprocess.run(
-                args, stdin=subprocess.DEVNULL, stdout=stdout_file,
-                stderr=subprocess.DEVNULL, check=True, timeout=timeout, shell=False,
-            )
-            stdout_file.seek(0)
-            data = stdout_file.read(MAX_TOOL_STDOUT_BYTES + 1)
-        if len(data) > MAX_TOOL_STDOUT_BYTES:
-            raise VideoNotesError("Dane wyjściowe narzędzia FFmpeg/FFprobe przekroczyły limit bezpieczeństwa.")
-        # FFprobe JSON and diagnostics are text. Replacement characters would
-        # silently change audio-track titles and source metadata.
-        try:
-            content = data.decode("utf-8", errors="strict")
-        except UnicodeError as error:
-            raise VideoNotesError("Lokalne narzędzie zwróciło niepoprawnie zakodowany tekst UTF-8.") from error
-        return subprocess.CompletedProcess(args, result.returncode, content, "")
+        proc = subprocess.Popen(
+            args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, shell=False, bufsize=0, **launch,
+        )
     except FileNotFoundError as err:
         raise VideoNotesError("Brakuje wymaganego lokalnego programu.") from err
-    except subprocess.TimeoutExpired as err:
-        raise VideoNotesError("Przekroczono czas działania narzędzia lokalnego.") from err
-    except subprocess.CalledProcessError as err:
-        # Never return process stderr or stdout: paths and speech can be private.
-        raise VideoNotesError("Lokalne narzędzie zgłosiło błąd. Sprawdź format i kodek źródła.") from err
     except OSError as err:
         raise VideoNotesError("Nie udało się uruchomić lokalnego narzędzia multimedialnego.") from err
+
+    data = bytearray()
+    finished = threading.Event()
+    oversized = threading.Event()
+    reader_error: list[Exception] = []
+
+    def consume() -> None:
+        try:
+            assert proc.stdout is not None
+            while True:
+                chunk = proc.stdout.read(64 * 1024)
+                if not chunk:
+                    break
+                if len(data) + len(chunk) > MAX_TOOL_STDOUT_BYTES:
+                    oversized.set()
+                    break
+                data.extend(chunk)
+        except (OSError, ValueError) as error:
+            reader_error.append(error)
+        finally:
+            finished.set()
+
+    reader = threading.Thread(target=consume, daemon=True)
+    started = time.monotonic()
+    reader_started = False
+    try:
+        reader.start()
+        reader_started = True
+        while not finished.wait(0.025):
+            if oversized.is_set():
+                raise VideoNotesError(
+                    "Dane wyjściowe narzędzia FFmpeg/FFprobe przekroczyły limit bezpieczeństwa."
+                )
+            if time.monotonic() - started >= timeout:
+                raise subprocess.TimeoutExpired(args, timeout)
+        if oversized.is_set():
+            raise VideoNotesError(
+                "Dane wyjściowe narzędzia FFmpeg/FFprobe przekroczyły limit bezpieczeństwa."
+            )
+        if reader_error:
+            raise VideoNotesError("Nie udało się bezpiecznie odczytać danych narzędzia.")
+        remaining = max(0.001, timeout - (time.monotonic() - started))
+        returncode = proc.wait(timeout=remaining)
+        if returncode:
+            # Never include process stdout/stderr, source path or spoken words.
+            raise VideoNotesError(
+                "Lokalne narzędzie zgłosiło błąd. Sprawdź format i kodek źródła."
+            )
+        try:
+            content = bytes(data).decode("utf-8", errors="strict")
+        except UnicodeError as error:
+            raise VideoNotesError(
+                "Lokalne narzędzie zwróciło niepoprawnie zakodowany tekst UTF-8."
+            ) from error
+        return subprocess.CompletedProcess(args, returncode, content, "")
+    except subprocess.TimeoutExpired as err:
+        raise VideoNotesError("Przekroczono czas działania narzędzia lokalnego.") from err
+    except OSError as err:
+        raise VideoNotesError("Nie udało się uruchomić lokalnego narzędzia multimedialnego.") from err
+    finally:
+        # A grandchild may keep the stdout pipe open even after its parent
+        # exits. Kill the whole fresh process group on timeout, overflow or
+        # incomplete drain. The utility handles POSIX groups and Windows /T.
+        try:
+            if proc.poll() is None or not finished.is_set():
+                from .asr_lab import _stop_process_tree
+                _stop_process_tree(proc)
+        finally:
+            if reader_started:
+                reader.join(timeout=1)
+            if proc.stdout is not None:
+                proc.stdout.close()
 
 
 def probe(source: Path, ffprobe: str = "ffprobe") -> dict:
