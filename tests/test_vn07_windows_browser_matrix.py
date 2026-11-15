@@ -12,7 +12,7 @@ from unittest import mock
 
 from scripts.vn07_windows_browser_matrix import (
     BROWSERS, SCHEMA, browser_executable, current_checkout,
-    publish_report, run_matrix,
+    publish_report, run_matrix, command_runner, parse_node_major, node_runtime_supported,
 )
 
 
@@ -132,6 +132,47 @@ class VN07WindowsBrowserMatrixTests(unittest.TestCase):
             self.assertNotEqual(run.returncode, 0)
             self.assertIn("Physical Windows only", run.stderr)
             self.assertFalse(output.exists())
+
+
+    def test_receipt_requires_actual_script_output_not_only_exit_zero(self):
+        with tempfile.TemporaryDirectory() as folder:
+            script = Path(folder) / "browser-smoke.cjs"
+            script.write_text("pass\n", encoding="utf-8")
+            self.assertEqual(command_runner([sys.executable, str(script)], {}, 15), 77)
+            script.write_text("raise SystemExit(9)\n", encoding="utf-8")
+            self.assertEqual(command_runner([sys.executable, str(script)], {}, 15), 9)
+
+    def test_nonce_bound_exclusive_synthetic_proof(self):
+        with tempfile.TemporaryDirectory() as folder:
+            script = Path(folder) / "browser-smoke.cjs"
+            original = '''
+import json
+import os
+from pathlib import Path
+payload = {
+    "schema": "videonotes-vn07-browser-receipt-v1",
+    "scenario": "browser-smoke.cjs",
+    "nonce": os.environ["KWN_MATRIX_NONCE"],
+    "synthetic_only": True,
+}
+Path(os.environ["KWN_MATRIX_RECEIPT"]).write_text(
+    json.dumps(payload), encoding="utf-8")
+'''
+            script.write_text(original, encoding="utf-8")
+            self.assertEqual(command_runner([sys.executable, str(script)], {}, 15), 0)
+            script.write_text(original.replace('os.environ["KWN_MATRIX_NONCE"]',
+                                                '"00000000000000000000000000000000"'), encoding="utf-8")
+            self.assertEqual(command_runner([sys.executable, str(script)], {}, 15), 77)
+            script.write_text(original.replace('"browser-smoke.cjs"', '"fake-app.js"'), encoding="utf-8")
+            self.assertEqual(command_runner([sys.executable, str(script)], {}, 15), 77)
+
+    def test_node_version_preflight_refuses_older_or_spoofed_tools(self):
+        self.assertEqual(parse_node_major(b"v22.0.0\n"), 22)
+        self.assertEqual(parse_node_major(b"v24.5.1"), 24)
+        self.assertEqual(parse_node_major(b"v21.9.0"), 21)
+        self.assertIsNone(parse_node_major(b"v22.1.0 trailing"))
+        self.assertIsNone(parse_node_major(b"malformed"))
+        self.assertFalse(node_runtime_supported(sys.executable))
 
 
 if __name__ == "__main__":

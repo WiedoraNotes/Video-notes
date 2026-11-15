@@ -10,10 +10,12 @@ import argparse
 import json
 import os
 import re
+import secrets
 import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -61,14 +63,61 @@ def browser_executable(name: str, supplied: str | None = None) -> str | None:
 
 
 def command_runner(command: list[str], extra_env: dict[str, str], timeout: int) -> int:
-    """Run synthetic scripts, discarding output to avoid private diagnostic leaks."""
-    environment = os.environ.copy()
-    environment.update(extra_env)
-    completed = subprocess.run(command, cwd=ROOT, env=environment,
-                               stdin=subprocess.DEVNULL,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                               timeout=timeout, check=False)
-    return completed.returncode
+    """Require a fresh nonce-bound receipt from the actual synthetic script.
+
+    The executed program cannot claim success just by returning exit code zero.
+    A clean, private, short-lived directory ensures the receipt does not persist.
+    This is evidence of the *automated* scenario only, never a human PASS.
+    """
+    scenario = Path(command[1]).name
+    if scenario not in {"browser-smoke.cjs", "firefox-smoke.cjs"}:
+        raise ValueError("Unrecognized local browser smoke script")
+    with tempfile.TemporaryDirectory(prefix="vn07-browser-proof-") as directory:
+        receipt = Path(directory) / "receipt.json"
+        nonce = secrets.token_hex(16)
+        environment = os.environ.copy()
+        environment.update(extra_env)
+        environment.update({"KWN_MATRIX_RECEIPT": str(receipt),
+                            "KWN_MATRIX_NONCE": nonce})
+        completed = subprocess.run(command, cwd=ROOT, env=environment,
+                                   stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                   timeout=timeout, check=False)
+        if completed.returncode != 0:
+            return completed.returncode
+        try:
+            metadata = receipt.lstat()
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 4096:
+                return 77
+            payload = json.loads(receipt.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
+            return 77
+        expected = {"schema": "videonotes-vn07-browser-receipt-v1",
+                    "scenario": scenario, "nonce": nonce, "synthetic_only": True}
+        return 0 if payload == expected else 77
+
+
+
+def parse_node_major(output: bytes) -> int | None:
+    """Accept only a short, well-formed Node semantic version."""
+    match = re.fullmatch(rb"v([0-9]{1,3})[.][0-9]{1,3}[.][0-9]{1,3}\s*", output)
+    return int(match.group(1)) if match else None
+
+
+def node_runtime_supported(binary: str) -> bool:
+    """Require Node >=22 for built-in WebSocket without npm or downloads."""
+    try:
+        with tempfile.TemporaryFile(mode="w+b") as capture:
+            result = subprocess.run([binary, "--version"], cwd=ROOT,
+                                    stdin=subprocess.DEVNULL, stdout=capture,
+                                    stderr=subprocess.DEVNULL, timeout=8, check=False)
+            if result.returncode != 0 or capture.tell() > 64:
+                return False
+            capture.seek(0)
+            major = parse_node_major(capture.read(65))
+            return major is not None and major >= 22
+    except (OSError, subprocess.TimeoutExpired):
+        return False
 
 
 def run_matrix(programs: dict[str, str | None],
@@ -164,7 +213,14 @@ def main() -> int:
         _branch, sha = current_checkout()
         programs = {name: browser_executable(name, getattr(args, name))
                     for name in ("node", "chrome", "edge", "firefox", "geckodriver")}
+        invalid_node = bool(programs["node"]) and not node_runtime_supported(programs["node"])
+        if invalid_node:
+            programs["node"] = None
         outcomes = run_matrix(programs)
+        if invalid_node:
+            for record in outcomes.values():
+                if record["status"] == "NOT_RUN" and record["reason"] == "MISSING_EXECUTABLE":
+                    record["reason"] = "NODE_22_REQUIRED"
         _after_branch, final_sha = current_checkout()
         if final_sha != sha:
             raise ValueError("Source checkout changed while running browser tests")
