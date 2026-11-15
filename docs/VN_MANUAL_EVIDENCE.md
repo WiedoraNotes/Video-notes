@@ -46,3 +46,9 @@ Nawet `SELF_REPORTED_PASS` dla całej macierzy **nie oznacza automatycznego DONE
 ## Kontrola zakresu i dat — 11.11.2026
 
 Wprowadzono dodatkowe ograniczenia walidatora: lokalny plik rejestru do 2 MiB, maksymalnie 512 wpisów, zakaz dat przyszłych. Nie da się przekazać do dalszego odbioru raportu datowanego na jutro, który przesłania wcześniejszy negatywny wynik. Wszystkie testy nadal są **deklaracją operatora**, nie niezależnym potwierdzeniem testu fizycznego. Wpisy pozostają poza GitHub.
+
+## Integralność odczytu rejestru — 15.11.2026
+
+Opcja `--check` czyta odtąd wyłącznie lokalny zwykły plik: nie pozwala na dowiązania symboliczne, sprawdza identyfikator i metadane pliku przed i po odczycie, a ponowny odczyt tego samego uchwytu porównuje SHA-256 nawet przy słabej precyzji znaczników czasu. Limit **2 MiB** jest egzekwowany także na rzeczywistych bajtach odczytanych z pliku, nie tylko na `stat()`. Parser odrzuca powielone pola w JSON (również zapisane z `\\u`), `NaN` i `Infinity`, więc wpis `FAIL` nie zostanie przypadkowo nadpisany późniejszym `PASS` o tej samej nazwie klucza.
+
+Narzędzie nie poświadcza autentyczności podpisów ani wyników testów. Wszelkie `SELF_REPORTED_PASS` nadal wymagają niezależnej weryfikacji, a cały rejestr i dane testera muszą pozostać prywatne.
