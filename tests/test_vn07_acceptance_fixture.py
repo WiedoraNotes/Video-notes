@@ -28,7 +28,7 @@ class VN07PhysicalFixtureTests(unittest.TestCase):
             self.assertEqual(report["schema"], "videonotes-vn07-synthetic-fixtures-v1")
             self.assertTrue(report["synthetic_only"])
             self.assertFalse(report["human_acceptance"])
-            self.assertEqual(len(report["files"]), 6)
+            self.assertEqual(len(report["files"]), 7)
             for name, metadata in report["files"].items():
                 blob = (folder / name).read_bytes()
                 self.assertEqual(metadata["sha256"], hashlib.sha256(blob).hexdigest())
