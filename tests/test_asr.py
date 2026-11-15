@@ -129,7 +129,7 @@ class WhisperAdapterTest(unittest.TestCase):
 
     def test_whisper_rejects_oversized_text_invalid_unicode_and_bad_chunk_time(self):
         good = lambda t: {"transcription": [{"text": t, "offsets": {"from": 0, "to": 10}}]}
-        bad_text = ("X" * 10001, "😀" * 5001, "\\ud800", "Ż\\x00ółw")
+        bad_text = ("X" * 10001, "😀" * 5001, chr(0xD800), "Ż" + chr(0) + "ółw")
         for value in bad_text:
             with self.subTest(value=repr(value[:25])):
                 with self.assertRaisesRegex(VideoNotesError, "Unicode|limitem"):
