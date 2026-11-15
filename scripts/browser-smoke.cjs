@@ -68,6 +68,21 @@ async function browserScenario() {
     throw new Error("Invalid UTF-8 was accepted or replaced current source");
   }
 
+  // Real file:// browser must reject hostile nesting without evicting the
+  // already-imported transcript. No network, device or private fixture.
+  const nested = "[".repeat(15000) + "0" + "]".repeat(15000);
+  Object.defineProperty(input, "files", {configurable: true, value: [
+    new File([nested], "deeply-nested.json", {type: "application/json"})
+  ]});
+  input.dispatchEvent(new Event("change", {bubbles: true}));
+  const nestedUntil = Date.now() + 4000;
+  while (!status.textContent.includes("Zbyt głęboki JSON") && Date.now() < nestedUntil) {
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  if (!status.textContent.includes("Zbyt głęboki JSON") || !label.textContent.startsWith("2 z 2")) {
+    throw new Error("Deep JSON replaced source or failed to report bounded parse error");
+  }
+
   const historyUndo = document.getElementById("undo-edit");
   const historyRedo = document.getElementById("redo-edit");
   if (!historyUndo || !historyRedo || !historyUndo.disabled || !historyRedo.disabled) {
