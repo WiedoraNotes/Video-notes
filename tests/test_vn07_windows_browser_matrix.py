@@ -167,7 +167,7 @@ Path(os.environ["KWN_MATRIX_RECEIPT"]).write_text(
             self.assertEqual(command_runner([sys.executable, str(script)], {}, 15), 77)
 
     def test_node_version_preflight_refuses_older_or_spoofed_tools(self):
-        self.assertEqual(parse_node_major(b"v22.0.0\\n"), 22)
+        self.assertEqual(parse_node_major(b"v22.0.0\n"), 22)
         self.assertEqual(parse_node_major(b"v24.5.1"), 24)
         self.assertEqual(parse_node_major(b"v21.9.0"), 21)
         self.assertIsNone(parse_node_major(b"v22.1.0 trailing"))
