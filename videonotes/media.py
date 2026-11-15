@@ -6,7 +6,6 @@ import math
 import os
 import shutil
 import subprocess
-import tempfile
 import threading
 import time
 import wave
@@ -89,9 +88,11 @@ def _run(args: list[str], *, timeout: int = 120) -> subprocess.CompletedProcess[
             finished.set()
 
     reader = threading.Thread(target=consume, daemon=True)
-    reader.start()
     started = time.monotonic()
+    reader_started = False
     try:
+        reader.start()
+        reader_started = True
         while not finished.wait(0.025):
             if oversized.is_set():
                 raise VideoNotesError(
@@ -127,12 +128,15 @@ def _run(args: list[str], *, timeout: int = 120) -> subprocess.CompletedProcess[
         # A grandchild may keep the stdout pipe open even after its parent
         # exits. Kill the whole fresh process group on timeout, overflow or
         # incomplete drain. The utility handles POSIX groups and Windows /T.
-        if proc.poll() is None or not finished.is_set():
-            from .asr_lab import _stop_process_tree
-            _stop_process_tree(proc)
-        reader.join(timeout=1)
-        if proc.stdout is not None:
-            proc.stdout.close()
+        try:
+            if proc.poll() is None or not finished.is_set():
+                from .asr_lab import _stop_process_tree
+                _stop_process_tree(proc)
+        finally:
+            if reader_started:
+                reader.join(timeout=1)
+            if proc.stdout is not None:
+                proc.stdout.close()
 
 
 def probe(source: Path, ffprobe: str = "ffprobe") -> dict:
