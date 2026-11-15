@@ -10,6 +10,20 @@ const path = require("node:path");
 const {pathToFileURL} = require("node:url");
 
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+function writeMatrixReceipt(scenario) {
+  const target = process.env.KWN_MATRIX_RECEIPT;
+  const nonce = process.env.KWN_MATRIX_NONCE;
+  if (!target && !nonce) return; // Normal CI browser runs do not create receipts.
+  if (!target || !/^[0-9a-f]{32}$/.test(nonce)) {
+    throw new Error("Incomplete synthetic browser receipt request");
+  }
+  fs.writeFileSync(target, JSON.stringify({
+    schema: "videonotes-vn07-browser-receipt-v1",
+    scenario, nonce, synthetic_only: true
+  }) + "\n", {encoding: "utf8", flag: "wx", mode: 0o600});
+}
+
 function httpJSON(url) {
   return new Promise((resolve, reject) => {
     const req = http.get(url, {timeout: 2500}, response => {
@@ -502,6 +516,7 @@ async function main() {
     }
     assert.equal(assertRealDownloads(realDownloads), 5);
     process.stdout.write("Chrome/Edge/Chromium real local downloaded TXT/SRT/VTT/JSON/patch bytes PASS\n");
+    writeMatrixReceipt("browser-smoke.cjs");
   } finally {
     if (socket) socket.close();
     const exited = new Promise(resolve => {
