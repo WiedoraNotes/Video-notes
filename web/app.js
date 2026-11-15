@@ -113,7 +113,7 @@
   // object URLs let browsers seek without loading an entire OBS video into JS RAM.
   function updateMediaControls() {
     elements.seek.disabled = !mediaUrl || selected === null;
-    elements.jump.disabled = !mediaUrl || !doc || !(elements.player.readyState >= 1);
+    elements.jump.disabled = !mediaUrl || !doc || !doc.segments.length || !(elements.player.readyState >= 1);
   }
   function clearMedia() {
     var previous = mediaUrl;
@@ -184,7 +184,7 @@
     }
   });
   elements.jump.addEventListener("click", function () {
-    if (!mediaUrl || !doc || !(elements.player.readyState >= 1)) return;
+    if (!mediaUrl || !doc || !doc.segments.length || !(elements.player.readyState >= 1)) return;
     var seconds = elements.player.currentTime;
     if (!Number.isFinite(seconds) || seconds < 0 || seconds > 86400) {
       message("Odtwarzacz nie udostępnia prawidłowego czasu.", true);
