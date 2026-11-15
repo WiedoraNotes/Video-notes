@@ -131,3 +131,9 @@ na konkretnym słabym urządzeniu. Treści nie są wysyłane do sieci.
 Bezpośrednie API parsera `parseExport` i `parseCorrections` (także przy osadzeniu adaptera w portalu) kontroluje teraz limit **20 MiB rzeczywistych bajtów UTF-8**, a nie wyłącznie długość łańcucha JavaScript w jednostkach UTF-16. Licznik jest ograniczony i nie tworzy dodatkowej ogromnej tablicy bajtów. Standardowy import pliku nadal oddzielnie kontroluje `File.size`, rozmiar odczytanej tablicy i poprawne kodowanie UTF-8.
 
 Dodatkowo przy poprawnym, ale pustym eksporcie (`segments: []`) przycisk nawigacji od czasu nagrania do wypowiedzi pozostaje nieaktywny, także po odczytaniu metadanych lokalnego WAV. Nie powstaje wyjątek w obsłudze kliknięcia. Testy Node obejmują oba błędy i zgodność zwykłych polskich treści. Zaliczenie tych testów ani CI nie oznacza fizycznego odbioru Windows/NVDA ani pełnego PASS etapu VN-07.
+
+## Ograniczenie głębokości JSON — 15.11.2026
+
+Skaner parsera WWW wykonuje przed `JSON.parse` kontrolę maksymalnie **64 poziomów** zagnieżdżenia obiektów i tablic. Obejmuje to zarówno lokalny import transkrypcji, jak i import paczki poprawek. Kontrola ignoruje nawiasy wewnątrz tekstów JSON, zachowuje wykrywanie zduplikowanych kluczy i pozostawia końcową walidację składni natywnemu parserowi. Celem jest odrzucenie nieprzewidywalnie głębokich struktur z zewnętrznych plików, zanim zostaną utworzone obiekty w pamięci.
+
+Testy automatyczne obejmują 15 000 poziomów, odmowę bez utraty aktualnych poprawek oraz import `file://` w prawdziwych przeglądarkach CI. Nie jest to potwierdzenie dostępności NVDA ani odbiór fizycznego Windows. Status VN-07 pozostaje W_TRAKCIE.
