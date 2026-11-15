@@ -11,6 +11,77 @@ import re
 from collections import Counter
 from pathlib import Path
 
+
+# Additional structural gate only; true provenance, physical execution and
+# independent human authorization must still be verified outside this script.
+REVIEW_KIND = {
+    "HUMAN_TEST": "PHYSICAL_WINDOWS",
+    "REVIEW": "HUMAN_REVIEW",
+    "LEGAL": "LEGAL_REVIEW",
+    "PORTAL": "PORTAL_REVIEW",
+    "DECISION": "PRODUCT_DECISION",
+}
+RECEIPT_KEYS = {
+    "schema", "case_id", "kind", "decision", "checked_at", "verified_commit",
+    "attested_by_human", "independently_reviewed", "evidence_url",
+}
+
+
+def validate_acceptance_receipt(task: dict) -> list[str]:
+    """Require a reviewable, scoped receipt before any non-DEV microtask is DONE.
+
+    It checks only data shape, never the truth of a human attestation or
+    authenticity of an external GitHub issue. An API review is still required.
+    """
+    uid = task["id"]
+    expected_kind = REVIEW_KIND.get(task.get("owner"))
+    if not expected_kind:
+        return []
+    receipt = task.get("acceptance_receipt")
+    if not isinstance(receipt, dict):
+        return [f"{uid}: non-DEV DONE requires independent human acceptance receipt"]
+    required = RECEIPT_KEYS | ({"deployed_sha", "full_regression_url", "environment_verified"}
+                                if expected_kind == "PORTAL_REVIEW" else set())
+    if set(receipt) != required:
+        return [f"{uid}: acceptance receipt has missing or unexpected fields"]
+    errors = []
+    if (receipt.get("schema") != "videonotes-human-acceptance-v1"
+            or receipt.get("case_id") != task.get("acceptance_id")
+            or receipt.get("kind") != expected_kind
+            or receipt.get("decision") != "APPROVED"):
+        errors.append(f"{uid}: acceptance receipt type/scope/decision mismatch")
+    if receipt.get("attested_by_human") is not True or receipt.get("independently_reviewed") is not True:
+        errors.append(f"{uid}: no independent human review attestation")
+    if not isinstance(receipt.get("verified_commit"), str) or not re.fullmatch(
+            r"[0-9a-f]{40}", receipt["verified_commit"]):
+        errors.append(f"{uid}: invalid tested Git commit")
+    checked_at = receipt.get("checked_at")
+    try:
+        from datetime import date
+        if not isinstance(checked_at, str) or date.fromisoformat(checked_at).isoformat() != checked_at:
+            raise ValueError("bad date")
+        if date.fromisoformat(checked_at) > date.today():
+            raise ValueError("future review")
+    except ValueError:
+        errors.append(f"{uid}: invalid or future acceptance date")
+    url = receipt.get("evidence_url")
+    if (not isinstance(url, str) or not re.fullmatch(
+        r"https://github[.]com/testowyemailaplikacja-spec/(?:Video-notes|Constant_app)/issues/[1-9][0-9]*", url
+    ) or url not in task.get("evidence_refs", [])):
+        errors.append(f"{uid}: receipt needs registered metadata-only GitHub issue")
+    if expected_kind == "PORTAL_REVIEW":
+        deployed = receipt.get("deployed_sha")
+        run_url = receipt.get("full_regression_url")
+        if (not isinstance(deployed, str) or not re.fullmatch(r"[0-9a-f]{40}", deployed)
+                or receipt.get("environment_verified") is not True):
+            errors.append(f"{uid}: portal receipt requires verified deployed SHA")
+        if not isinstance(run_url, str) or not re.fullmatch(
+            r"https://github[.]com/testowyemailaplikacja-spec/Constant_app/actions/runs/[1-9][0-9]*", run_url
+        ):
+            errors.append(f"{uid}: portal receipt needs a reviewable full-regression run")
+    return errors
+
+
 ROOT = Path(__file__).resolve().parents[1]
 TASK_FILE = ROOT / "docs" / "VN_MICROTASKS.json"
 STATUS_FILE = ROOT / "docs" / "VN_STATUS.json"
@@ -67,6 +138,7 @@ def audit(queue: dict, stage_ledger: dict) -> list[str]:
                 isinstance(v, str) and v.startswith("https://github.com/") for v in evidence
             ):
                 errors.append(f"{uid}: DONE requires reviewable GitHub evidence references")
+            errors.extend(validate_acceptance_receipt(task))
     for uid, task in by_id.items():
         deps = task.get("depends_on")
         if not isinstance(deps, list):
