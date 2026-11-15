@@ -331,3 +331,18 @@ test("direct browser-core imports enforce 20 MiB of actual UTF-8 bytes, not UTF-
   const corrections = core.renderCorrections(small, {[small.segments[0].id]: "Korekta łóżko"});
   assert.equal(core.parseCorrections(small, corrections)[small.segments[0].id], "Korekta łóżko");
 });
+
+test("browser parser refuses deeply nested JSON before allocation and preserves quoted brackets", () => {
+  const nested = "[".repeat(15000) + "0" + "]".repeat(15000);
+  assert.throws(() => core.parseExport(nested), /Zbyt głęboki JSON/);
+  assert.throws(() => core.parseCorrections(fixture(), nested), /Zbyt głęboki JSON/);
+  const hugeMetadata = {...fixture(), ignored: Array.from({length: 70}).reduce(
+    (value) => [value], "end"
+  )};
+  assert.throws(() => core.parseExport(JSON.stringify(hugeMetadata)), /Zbyt głęboki JSON/);
+  const quoted = fixture();
+  quoted.segments[0].text = "Słownie [[[[[[ i {{{{ oraz \\" } : [ bez nowej struktury";
+  assert.deepEqual(core.parseExport(JSON.stringify(quoted)), quoted);
+  const patch = core.renderCorrections(quoted, {[quoted.segments[0].id]: "W tekście są [[[ i {{{"});
+  assert.equal(core.parseCorrections(quoted, patch)[quoted.segments[0].id], "W tekście są [[[ i {{{");
+});
