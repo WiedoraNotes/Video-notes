@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from videonotes.asr import WhisperCpp, parse_whisper_output
+from videonotes.stable_local_read import MAX_ASR_JSON_BYTES, read_stable_local_json
 from videonotes.errors import VideoNotesError
 
 
@@ -91,6 +94,91 @@ class WhisperAdapterTest(unittest.TestCase):
             self.assertIn("--no-prints", calls[0])
             self.assertIn("--output-json", calls[0])
             self.assertNotIn("http", " ".join(calls[0]))
+
+
+    def test_whisper_fails_closed_on_bad_json_numbers_depth_and_encoding(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            model = root / "model.bin"
+            model.write_bytes(b"model-synthetic-only")
+            exe = root / "whisper-cli"
+            exe.write_text("synthetic", encoding="utf-8")
+            wav = root / "input.wav"
+            wav.write_bytes(b"private-synthetic-media")
+            examples = (
+                b'{"transcription":[],"metadata":NaN}',
+                b'{"transcription":[],"metadata":Infinity}',
+                b'{"transcription":[],"metadata":-Infinity}',
+                b'{"transcription":[],"metadata":' + b"[" * 15000 + b"0" + b"]" * 15000 + b"}",
+                b'{"transcription":[],"metadata":' + b"8" * 8000 + b"}",
+                b'{"transcription":[{"text":"\\xff","offsets":{"from":0,"to":25}}]}',
+                b"\\xff\\xfe",
+            )
+            def make_fake(raw):
+                def runner(args, **kwargs):
+                    Path(args[args.index("--output-file") + 1] + ".json").write_bytes(raw)
+                return runner
+            with patch("videonotes.asr.executable", return_value=str(exe)):
+                engine = WhisperCpp(str(exe), model)
+                for raw in examples:
+                    with self.subTest(length=len(raw)), patch("videonotes.asr._run", side_effect=make_fake(raw)):
+                        with self.assertRaises(VideoNotesError) as error:
+                            engine.transcribe(wav, language="pl", offset_ms=0, duration_ms=100)
+                        self.assertNotIn(str(root), str(error.exception))
+                        self.assertEqual(wav.read_bytes(), b"private-synthetic-media")
+
+    def test_whisper_rejects_oversized_text_invalid_unicode_and_bad_chunk_time(self):
+        good = lambda t: {"transcription": [{"text": t, "offsets": {"from": 0, "to": 10}}]}
+        bad_text = ("X" * 10001, "😀" * 5001, "\\ud800", "Ż\\x00ółw")
+        for value in bad_text:
+            with self.subTest(value=repr(value[:25])):
+                with self.assertRaisesRegex(VideoNotesError, "Unicode|limitem"):
+                    parse_whisper_output(good(value), offset_ms=0, duration_ms=100)
+        self.assertEqual(parse_whisper_output(good("😀" * 5000), offset_ms=0, duration_ms=100)[0]["text"],
+                         "😀" * 5000)
+        for offset, duration in ((True, 100), (-1, 100), (0, 0),
+                                 (0, False), (86400000, 1), (0, 86400001)):
+            with self.subTest(offset=offset, duration=duration):
+                with self.assertRaisesRegex(VideoNotesError, "czas fragmentu"):
+                    parse_whisper_output(good("OK"), offset_ms=offset, duration_ms=duration)
+
+    def test_stable_reader_supports_larger_asr_ceiling_without_raising_import_limit(self):
+        with tempfile.TemporaryDirectory() as folder:
+            file = Path(folder) / "local-model.json"
+            content = b'{"transcription":[]}'
+            file.write_bytes(content)
+            raw, digest = read_stable_local_json(file, max_bytes=MAX_ASR_JSON_BYTES)
+            self.assertEqual(raw, content)
+            self.assertEqual(digest, hashlib.sha256(content).hexdigest())
+            with self.assertRaises(VideoNotesError):
+                read_stable_local_json(file, max_bytes=len(content) - 1)
+            for invalid in (0, False, -1, MAX_ASR_JSON_BYTES + 1):
+                with self.subTest(invalid=invalid), self.assertRaises(VideoNotesError):
+                    read_stable_local_json(file, max_bytes=invalid)
+
+    def test_whisper_rejects_json_file_changed_during_read_without_checkpoint(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            model = root / "model.bin"
+            model.write_bytes(b"fake-model")
+            exe = root / "whisper-cli"
+            exe.write_text("synthetic", encoding="utf-8")
+            wav = root / "input.wav"
+            wav.write_bytes(b"unchanged-source")
+            def fake_run(args, **kwargs):
+                Path(args[args.index("--output-file") + 1] + ".json").write_bytes(
+                    b'{"transcription":[{"text":"secret speech","offsets":{"from":0,"to":10}}]}'
+                )
+            with patch("videonotes.asr.executable", return_value=str(exe)), \
+                    patch("videonotes.asr._run", side_effect=fake_run), \
+                    patch("videonotes.asr.read_stable_local_json",
+                          side_effect=VideoNotesError("Changed while reading")) as stable:
+                with self.assertRaisesRegex(VideoNotesError, "Changed while reading"):
+                    WhisperCpp(str(exe), model).transcribe(wav, language="pl",
+                                                         offset_ms=0, duration_ms=100)
+                self.assertEqual(stable.call_args.kwargs, {"max_bytes": MAX_ASR_JSON_BYTES})
+            self.assertEqual(wav.read_bytes(), b"unchanged-source")
+
 
 if __name__ == "__main__":
     unittest.main()
