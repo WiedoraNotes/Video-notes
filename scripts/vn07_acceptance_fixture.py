@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
+import wave
 import os
 import sys
 from pathlib import Path
