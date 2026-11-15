@@ -101,9 +101,13 @@ class VN07WindowsBrowserMatrixTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 publish_report(Path(temp) / "bad.txt", report)
             existing = Path(temp) / "root.json"
-            existing.symlink_to(destination)
-            with self.assertRaises(ValueError):
-                publish_report(existing, report)
+            try:
+                existing.symlink_to(destination)
+            except (OSError, NotImplementedError):
+                pass  # Windows runner without Developer Mode: separate symlink test skips.
+            else:
+                with self.assertRaises(ValueError):
+                    publish_report(existing, report)
 
     def test_symlink_executable_not_selected_and_never_downloaded(self):
         with tempfile.TemporaryDirectory() as temp:
