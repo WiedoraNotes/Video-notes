@@ -97,6 +97,29 @@ def command_runner(command: list[str], extra_env: dict[str, str], timeout: int) 
         return 0 if payload == expected else 77
 
 
+
+def parse_node_major(output: bytes) -> int | None:
+    """Accept only a short, well-formed Node semantic version."""
+    match = re.fullmatch(rb"v([0-9]{1,3})[.][0-9]{1,3}[.][0-9]{1,3}\\s*", output)
+    return int(match.group(1)) if match else None
+
+
+def node_runtime_supported(binary: str) -> bool:
+    """Require Node >=22 for built-in WebSocket without npm or downloads."""
+    try:
+        with tempfile.TemporaryFile(mode="w+b") as capture:
+            result = subprocess.run([binary, "--version"], cwd=ROOT,
+                                    stdin=subprocess.DEVNULL, stdout=capture,
+                                    stderr=subprocess.DEVNULL, timeout=8, check=False)
+            if result.returncode != 0 or capture.tell() > 64:
+                return False
+            capture.seek(0)
+            major = parse_node_major(capture.read(65))
+            return major is not None and major >= 22
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
 def run_matrix(programs: dict[str, str | None],
                invoke: Callable[[list[str], dict[str, str], int], int] = command_runner) -> dict:
     """A successful script proves automation only, not hardware or NVDA acceptance."""
@@ -190,7 +213,14 @@ def main() -> int:
         _branch, sha = current_checkout()
         programs = {name: browser_executable(name, getattr(args, name))
                     for name in ("node", "chrome", "edge", "firefox", "geckodriver")}
+        invalid_node = bool(programs["node"]) and not node_runtime_supported(programs["node"])
+        if invalid_node:
+            programs["node"] = None
         outcomes = run_matrix(programs)
+        if invalid_node:
+            for record in outcomes.values():
+                if record["status"] == "NOT_RUN" and record["reason"] == "MISSING_EXECUTABLE":
+                    record["reason"] = "NODE_22_REQUIRED"
         _after_branch, final_sha = current_checkout()
         if final_sha != sha:
             raise ValueError("Source checkout changed while running browser tests")
