@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -111,8 +110,9 @@ class WhisperAdapterTest(unittest.TestCase):
                 b'{"transcription":[],"metadata":-Infinity}',
                 b'{"transcription":[],"metadata":' + b"[" * 15000 + b"0" + b"]" * 15000 + b"}",
                 b'{"transcription":[],"metadata":' + b"8" * 8000 + b"}",
-                b'{"transcription":[{"text":"\\xff","offsets":{"from":0,"to":25}}]}',
-                b"\\xff\\xfe",
+                b'{"transcription":[{"text":"' + bytes((0xff,)) +
+                b'","offsets":{"from":0,"to":25}}]}',
+                bytes((0xff, 0xfe)),
             )
             def make_fake(raw):
                 def runner(args, **kwargs):
