@@ -665,3 +665,19 @@ test("playhead pointing to current segment preserves draft even if filter hides 
   assert.match(ux.elements["selected-label"].textContent, /seg-2/);
   assert.equal(ux.state.prompts.length, 0);
 });
+
+test("empty transcript never enables playhead lookup even when local media is ready", async () => {
+  const ux = boot();
+  await ux.importFile(source("empty-source", 0));
+  assert.match(ux.elements["match-count"].textContent, /^0 z 0/);
+  ux.importMedia();
+  const player = ux.elements["source-player"];
+  player.readyState = 1;
+  player.duration = 4;
+  player.currentTime = 2;
+  player.events.loadedmetadata();
+  assert.equal(ux.elements["jump-playhead"].disabled, true);
+  assert.equal(ux.elements["seek-segment"].disabled, true);
+  assert.doesNotThrow(() => ux.elements["jump-playhead"].events.click());
+  assert.match(ux.elements["match-count"].textContent, /^0 z 0/);
+});

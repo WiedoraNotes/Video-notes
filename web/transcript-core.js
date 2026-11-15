@@ -33,9 +33,11 @@
       if (size > (patchOnly ? MAX_PATCH_BYTES : MAX_OUTPUT_BYTES)) exportTooLarge(patchOnly ? MAX_PATCH_BYTES : MAX_OUTPUT_BYTES);
     }
   }
-  function utf8BytesUnderLimit(payload, limit) {
-    limit = limit || MAX_OUTPUT_BYTES;
-    if (payload.length > limit) exportTooLarge(limit);
+  // File.size protects the UI path; direct core callers (including portal
+  // adapters) must enforce the same BYTE cap before allocating parsed JSON.
+  // Avoid TextEncoder's full-size copy for multi-megabyte untrusted inputs.
+  function utf8WithinLimit(payload, limit) {
+    if (payload.length > limit) return false;
     var count = 0;
     for (var i = 0; i < payload.length; i++) {
       var ch = payload.charCodeAt(i);
@@ -46,8 +48,13 @@
                payload.charCodeAt(i + 1) >= 0xdc00 &&
                payload.charCodeAt(i + 1) <= 0xdfff) { count += 4; i++; }
       else count += 3;
-      if (count > limit) exportTooLarge(limit);
+      if (count > limit) return false;
     }
+    return true;
+  }
+  function utf8BytesUnderLimit(payload, limit) {
+    limit = limit || MAX_OUTPUT_BYTES;
+    if (!utf8WithinLimit(payload, limit)) exportTooLarge(limit);
     return payload;
   }
 
@@ -151,7 +158,9 @@
   }
 
   function parseExport(source) {
-    if (!validText(source, MAX_BYTES)) reject("Plik jest zbyt duży lub nie zawiera poprawnego tekstu.");
+    if (!validText(source, MAX_BYTES) || !utf8WithinLimit(source, MAX_BYTES)) {
+      reject("Plik jest zbyt duży lub nie zawiera poprawnego tekstu.");
+    }
     var parsed;
     try { parsed = parseUniqueJSON(source); }
     catch (error) { if (error.message.includes("Zduplikowany klucz JSON")) throw error; reject("Plik nie jest poprawnym JSON."); }
@@ -256,7 +265,7 @@
   // No partial changes, cloud calls or persistent storage.
   function parseCorrections(model, source) {
     var doc = validateExport(model);
-    if (typeof source !== "string" || source.length > MAX_PATCH_BYTES) {
+    if (typeof source !== "string" || !utf8WithinLimit(source, MAX_PATCH_BYTES)) {
       reject("Plik poprawek przekracza limit 20 MiB lub nie jest poprawnym tekstem.");
     }
     var patch;
