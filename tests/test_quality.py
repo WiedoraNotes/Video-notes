@@ -135,8 +135,6 @@ class QualityHarnessTest(unittest.TestCase):
 
             def grow_during_first_candidate_read(descriptor, count):
                 content = original_read(descriptor, count)
-                if content == b"Wlasny tekst":  # ASCII byte spelling below differs
-                    self.fail("Test fixture must use actual UTF-8 data")
                 if content == "Własny tekst".encode("utf-8") and not grows:
                     with candidate.open("ab") as stream:
                         stream.write(b"Z" * (quality.MAX_BYTES + 900))
@@ -191,7 +189,7 @@ class QualityHarnessTest(unittest.TestCase):
             ref = root / "reference.txt"
             candidate = root / "candidate.txt"
             output = root / "comparison.json"
-            ref.write_bytes(b"\\xef\\xbb\\xbf" + "Połączenie szyfrowane".encode("utf-8"))
+            ref.write_bytes(bytes((0xef, 0xbb, 0xbf)) + "Połączenie szyfrowane".encode("utf-8"))
             candidate.write_text("Połączenie szyfrowane", encoding="utf-8")
             report = compare_text_files(ref, {"whisper_cpp": candidate}, output=output)
             self.assertEqual(report["results"][0]["wer"], 0)
