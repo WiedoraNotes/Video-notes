@@ -58,7 +58,8 @@ async function main() {
     const created = await webdriver(base, "POST", "/session", {
       capabilities: {alwaysMatch: {
         browserName: "firefox",
-        "moz:firefoxOptions": {args: ["-headless"], prefs: {
+        "moz:firefoxOptions": {binary: process.env.FIREFOX_BIN || undefined,
+          args: ["-headless"], prefs: {
           "app.update.enabled": false, "browser.shell.checkDefaultBrowser": false
         }}
       }}
