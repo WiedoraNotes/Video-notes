@@ -3,12 +3,27 @@
 // Uses the Node 22 fetch API and W3C WebDriver on loopback only: no npm or cloud.
 const assert = require("node:assert/strict");
 const child = require("node:child_process");
+const fs = require("node:fs");
 const net = require("node:net");
 const path = require("node:path");
 const {pathToFileURL} = require("node:url");
 const {browserScenario} = require("./browser-smoke.cjs");
 
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+function writeMatrixReceipt(scenario) {
+  const target = process.env.KWN_MATRIX_RECEIPT;
+  const nonce = process.env.KWN_MATRIX_NONCE;
+  if (!target && !nonce) return; // Normal CI browser runs do not create receipts.
+  if (!target || !/^[0-9a-f]{32}$/.test(nonce)) {
+    throw new Error("Incomplete synthetic browser receipt request");
+  }
+  fs.writeFileSync(target, JSON.stringify({
+    schema: "videonotes-vn07-browser-receipt-v1",
+    scenario, nonce, synthetic_only: true
+  }) + "\n", {encoding: "utf8", flag: "wx", mode: 0o600});
+}
+
 async function freePort() {
   const server = net.createServer();
   await new Promise((resolve, reject) => {
@@ -84,6 +99,7 @@ async function main() {
     assert.equal(run.data.networkRequests, 0);
     process.stdout.write("Firefox file:// import/edit/50k/focus/zero-resource smoke PASS (" +
       run.data.largeInteractionMs + "ms)\n");
+    writeMatrixReceipt("firefox-smoke.cjs");
   } finally {
     if (session) {
       try { await webdriver(base, "DELETE", "/session/" + session, undefined, 10000); }
