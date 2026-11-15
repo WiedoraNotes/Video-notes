@@ -120,8 +120,9 @@ class QualityHarnessTest(unittest.TestCase):
             self.assertFalse(report.exists())
             self.assertIn("wzorzec", genuine.read_text(encoding="utf-8"))
 
-    def test_file_growing_after_stat_is_bounded_and_cannot_publish_report(self):
+    def test_file_growth_during_read_is_bounded_and_cannot_publish_report(self):
         from videonotes import quality
+        from videonotes import stable_local_read as local_read
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             ref = root / "human.txt"
@@ -129,19 +130,75 @@ class QualityHarnessTest(unittest.TestCase):
             report = root / "scores.json"
             ref.write_text("Tylko wzorzec polskiej mowy.", encoding="utf-8")
             candidate.write_text("Własny tekst", encoding="utf-8")
-            original_open = Path.open
+            original_read = local_read.os.read
             grows = []
-            def grow_between_preflight_and_read(path, *args, **kwargs):
-                if Path(path) == candidate and args and args[0] == "rb" and not grows:
-                    with original_open(candidate, "wb") as stream:
+
+            def grow_during_first_candidate_read(descriptor, count):
+                content = original_read(descriptor, count)
+                if content == b"Wlasny tekst":  # ASCII byte spelling below differs
+                    self.fail("Test fixture must use actual UTF-8 data")
+                if content == "Własny tekst".encode("utf-8") and not grows:
+                    with candidate.open("ab") as stream:
                         stream.write(b"Z" * (quality.MAX_BYTES + 900))
+                        stream.flush()
                     grows.append(True)
-                return original_open(path, *args, **kwargs)
-            with patch("videonotes.quality.Path.open", new=grow_between_preflight_and_read):
-                with self.assertRaisesRegex(VideoNotesError, "zmienił rozmiar"):
+                return content
+
+            with patch("videonotes.stable_local_read.os.read",
+                       side_effect=grow_during_first_candidate_read):
+                with self.assertRaisesRegex(VideoNotesError, "limit|zmieni"):
                     compare_text_files(ref, {"candidate": candidate}, output=report)
             self.assertEqual(grows, [True])
             self.assertFalse(report.exists())
+
+    def test_same_size_in_place_candidate_edit_during_read_refuses_wer_report(self):
+        from videonotes import stable_local_read as local_read
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            ref = root / "human.txt"
+            candidate = root / "candidate.txt"
+            report = root / "scores.json"
+            ref.write_text("Kolejowa sieć transmisyjna", encoding="utf-8")
+            before = b"ABCD program"
+            after = b"WXYZ program"
+            candidate.write_bytes(before)
+            original_read = local_read.os.read
+            changed = []
+
+            def corrupt_during_candidate_read(descriptor, count):
+                result = original_read(descriptor, count)
+                if result == before and not changed:
+                    # Same inode, exact same byte count: stat().st_size alone
+                    # cannot prove the bytes used by WER were a stable snapshot.
+                    with candidate.open("r+b") as output:
+                        output.seek(0)
+                        output.write(after)
+                        output.flush()
+                    changed.append(True)
+                return result
+
+            with patch("videonotes.stable_local_read.os.read",
+                       side_effect=corrupt_during_candidate_read):
+                with self.assertRaisesRegex(VideoNotesError, "zmieni"):
+                    compare_text_files(ref, {"candidate": candidate}, output=report)
+            self.assertEqual(changed, [True])
+            self.assertFalse(report.exists())
+            self.assertEqual(candidate.read_bytes(), after)
+
+    def test_reference_can_have_utf8_bom_but_corrupt_utf8_is_rejected(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            ref = root / "reference.txt"
+            candidate = root / "candidate.txt"
+            output = root / "comparison.json"
+            ref.write_bytes(b"\\xef\\xbb\\xbf" + "Połączenie szyfrowane".encode("utf-8"))
+            candidate.write_text("Połączenie szyfrowane", encoding="utf-8")
+            report = compare_text_files(ref, {"whisper_cpp": candidate}, output=output)
+            self.assertEqual(report["results"][0]["wer"], 0)
+            self.assertNotIn("Połączenie", output.read_text("utf-8"))
+            ref.write_bytes(bytes((0xff,0xfe)))
+            with self.assertRaises(VideoNotesError):
+                validate_reference_file(ref)
 
     def test_fast_reference_preflight_rejects_invalid_before_distance(self):
         with tempfile.TemporaryDirectory() as folder:
