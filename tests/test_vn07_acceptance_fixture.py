@@ -34,6 +34,10 @@ class VN07PhysicalFixtureTests(unittest.TestCase):
                 self.assertEqual(metadata["sha256"], hashlib.sha256(blob).hexdigest())
                 self.assertEqual(metadata["bytes"], len(blob))
             self.assertEqual(json.loads((folder / "manifest.json").read_text(encoding="utf-8")), report)
+            with wave.open(io.BytesIO((folder / "vn07-silent-four-seconds.wav").read_bytes()), "rb") as reader:
+                self.assertEqual(reader.getframerate(), 8000)
+                self.assertEqual(reader.getnchannels(), 1)
+                self.assertEqual(reader.getnframes(), 4 * 8000)
             small = parse_portable_export((folder / "vn07-small.json").read_bytes())
             large = parse_portable_export((folder / "vn07-large-50000.json").read_bytes())
             self.assertEqual(len(small["segments"]), 3)
