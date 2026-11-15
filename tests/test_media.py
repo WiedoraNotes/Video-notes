@@ -69,6 +69,16 @@ class OfflineFFmpegProcessSafetyTest(unittest.TestCase):
                   "import sys;sys.stdout.buffer.write(b'PRIVATE'*400000)"], timeout=15)
         self.assertNotIn("PRIVATE", str(issue.exception))
 
+    def test_real_process_invalid_utf8_fails_without_silent_replacement(self):
+        with self.assertRaisesRegex(VideoNotesError, "UTF-8") as error:
+            _run([sys.executable, "-c",
+                  "import sys;sys.stdout.buffer.write(bytes((0xff,0xfe)))"], timeout=15)
+        self.assertNotIn("0xff", str(error.exception))
+        good = _run([sys.executable, "-c",
+                     "import sys;sys.stdout.buffer.write('Zażółć'.encode('utf-8'))"], timeout=15)
+        self.assertEqual(good.stdout, "Zażółć")
+        self.assertEqual(good.stderr, "")
+
     def test_real_process_stderr_is_not_collected(self):
         proc = _run([sys.executable, "-c",
                      "import sys;sys.stderr.write('SECRET\\n');print('READY')"], timeout=15)
@@ -139,6 +149,58 @@ class FFprobeMetadataSafetyTest(unittest.TestCase):
             for payload in bad:
                 with self.subTest(payload=payload[:100]), self.assertRaises(VideoNotesError):
                     fake(payload)
+
+
+    def test_ffprobe_refuses_surrogates_nul_oversized_labels_and_deep_json(self):
+        import json
+        from subprocess import CompletedProcess
+        from videonotes.pipeline import create_project
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "private-OBS.mkv"
+            source.write_bytes(b"synthetic FFprobe-only input")
+            model = root / "mock-model.bin"
+            model.write_bytes(b"mock only")
+            valid = {"format": {"duration": "2.4"}, "streams": [
+                {"index": 0, "codec_type": "audio", "codec_name": "flac",
+                 "channels": 2, "tags": {"title": "Nagranie PL 🔊", "language": "pol"}},
+            ]}
+            def fake(blob):
+                with patch("videonotes.media.executable", return_value="ffprobe"), patch(
+                    "videonotes.media._run",
+                    return_value=CompletedProcess(["ffprobe"], 0, blob, "")
+                ):
+                    return probe(source)
+            outcome = fake(json.dumps(valid, ensure_ascii=False))
+            self.assertEqual(outcome["audio_streams"][0]["title"], "Nagranie PL 🔊")
+            for label in (chr(0xd800), "X" + chr(0) + "Y", "😀" * 129):
+                for field in ("codec_name", "title", "language"):
+                    with self.subTest(field=field, label=repr(label)[:50]):
+                        item = json.loads(json.dumps(valid))
+                        if field == "codec_name":
+                            item["streams"][0]["codec_name"] = label
+                        else:
+                            item["streams"][0]["tags"][field] = label
+                        with self.assertRaisesRegex(VideoNotesError, "FFprobe nie rozpoznał") as raised:
+                            fake(json.dumps(item, ensure_ascii=True))
+                        self.assertNotIn(str(root), str(raised.exception))
+            raw = (json.dumps(valid, ensure_ascii=False)[:-1] +
+                   ',"untrusted":' + "[" * 15000 + "0" + "]" * 15000 + "}")
+            with self.assertRaisesRegex(VideoNotesError, "FFprobe nie rozpoznał"):
+                fake(raw)
+            # The malformed metadata must be rejected *before* any new project
+            # or partial JSON files can be created.
+            broken = json.loads(json.dumps(valid))
+            broken["streams"][0]["tags"]["title"] = "Broken" + chr(0xd800)
+            target = root / "new-project"
+            with patch("videonotes.media.executable", return_value="ffprobe"), patch(
+                "videonotes.media._run",
+                return_value=CompletedProcess(["ffprobe"], 0, json.dumps(broken), "")
+            ):
+                with self.assertRaises(VideoNotesError):
+                    create_project(source, target, model=model,
+                                   whisper_cli="synthetic-whisper", chunk_ms=1000)
+            self.assertFalse(target.exists())
 
     def test_stream_index_and_extraction_values_must_be_true_integers(self):
         meta = {"audio_streams": [{"index": 1, "codec": "aac"}]}
