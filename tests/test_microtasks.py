@@ -6,7 +6,7 @@ import json
 import unittest
 from pathlib import Path
 
-from scripts.check_vn_microtasks import ROOT, audit, summary
+from scripts.check_vn_microtasks import ROOT, audit, summary, validate_acceptance_receipt
 
 
 class MicrotaskAuditTests(unittest.TestCase):
@@ -65,6 +65,74 @@ class MicrotaskAuditTests(unittest.TestCase):
         queue = copy.deepcopy(self.queue)
         queue["tasks"][0]["stage"] = "VN-06"
         self.assertTrue(any("stage mismatch" in x for x in audit(queue, self.phases)))
+
+
+    def test_human_task_cannot_be_done_using_only_successful_ci_and_pr(self):
+        queue = copy.deepcopy(self.queue)
+        task = next(t for t in queue["tasks"] if t["id"] == "VN-07-02")
+        self.assertEqual(task["owner"], "HUMAN_TEST")
+        self.assertEqual(next(t for t in queue["tasks"] if t["id"] == "VN-07-01")["status"], "DONE")
+        task["status"] = "DONE"
+        task["evidence_refs"] = ["https://github.com/testowyemailaplikacja-spec/Video-notes/pull/219"]
+        errors = audit(queue, self.phases)
+        self.assertTrue(any("requires independent human acceptance receipt" in e for e in errors))
+
+    def test_acceptance_receipt_requires_scoped_independent_issue_and_nonfuture_date(self):
+        task = next(t for t in self.queue["tasks"] if t["id"] == "VN-07-02")
+        test_task = copy.deepcopy(task)
+        test_task["status"] = "DONE"
+        issue = "https://github.com/testowyemailaplikacja-spec/Video-notes/issues/95"
+        test_task["evidence_refs"] = [issue]
+        test_task["acceptance_receipt"] = {
+            "schema": "videonotes-human-acceptance-v1",
+            "case_id": "WEB-01", "kind": "PHYSICAL_WINDOWS",
+            "decision": "APPROVED", "checked_at": "2026-11-15",
+            "verified_commit": "a" * 40, "attested_by_human": True,
+            "independently_reviewed": True, "evidence_url": issue,
+        }
+        # A structurally well-formed record is NOT proof that a human actually
+        # executed the test, signed it, or owns the issue; offline audit cannot
+        # assert that. This test validates only fail-closed field handling.
+        self.assertEqual(validate_acceptance_receipt(test_task), [])
+        fake = copy.deepcopy(test_task)
+        fake["acceptance_receipt"]["kind"] = "CI"
+        self.assertTrue(any("scope" in e for e in validate_acceptance_receipt(fake)))
+        fake = copy.deepcopy(test_task)
+        fake["acceptance_receipt"]["evidence_url"] = "https://github.com/owner/repo/pull/1"
+        self.assertTrue(any("metadata-only" in e for e in validate_acceptance_receipt(fake)))
+        fake = copy.deepcopy(test_task)
+        fake["acceptance_receipt"]["checked_at"] = "2999-12-31"
+        self.assertTrue(any("future" in e for e in validate_acceptance_receipt(fake)))
+        fake = copy.deepcopy(test_task)
+        fake["acceptance_receipt"]["independently_reviewed"] = False
+        self.assertTrue(any("independent" in e for e in validate_acceptance_receipt(fake)))
+
+    def test_portal_task_needs_verified_deploy_and_host_regression(self):
+        task = copy.deepcopy(next(t for t in self.queue["tasks"] if t["id"] == "VN-07-05"))
+        url = "https://github.com/testowyemailaplikacja-spec/Constant_app/issues/95"
+        task["evidence_refs"] = [url]
+        task["acceptance_receipt"] = {
+            "schema": "videonotes-human-acceptance-v1",
+            "case_id": "HOST-01", "kind": "PORTAL_REVIEW",
+            "decision": "APPROVED", "checked_at": "2026-11-15",
+            "verified_commit": "a" * 40,
+            "attested_by_human": True, "independently_reviewed": True,
+            "evidence_url": url,
+            "deployed_sha": "", "environment_verified": False,
+            "full_regression_url": "",
+        }
+        errors = validate_acceptance_receipt(task)
+        self.assertTrue(any("deployed SHA" in e for e in errors))
+        self.assertTrue(any("full-regression" in e for e in errors))
+        task["acceptance_receipt"]["deployed_sha"] = "b" * 40
+        task["acceptance_receipt"]["environment_verified"] = True
+        task["acceptance_receipt"]["full_regression_url"] = (
+            "https://github.com/testowyemailaplikacja-spec/Constant_app/actions/runs/43672684828"
+        )
+        # Structural format alone cannot tell that the linked workflow failed.
+        # Full CI status and environment SHA must be checked independently.
+        self.assertEqual(validate_acceptance_receipt(task), [])
+
 
 
 if __name__ == "__main__":
