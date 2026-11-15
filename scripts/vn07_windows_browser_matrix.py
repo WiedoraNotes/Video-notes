@@ -31,6 +31,8 @@ def browser_executable(name: str, supplied: str | None = None) -> str | None:
         candidate = Path(supplied).expanduser()
         if candidate.is_file() and not candidate.is_symlink():
             return str(candidate.resolve())
+        if candidate.exists() or candidate.is_symlink():
+            return None
         return shutil.which(supplied)
     defaults = {
         "chrome": ("chrome.exe", "chrome", "google-chrome"),
@@ -86,7 +88,8 @@ def run_matrix(programs: dict[str, str | None],
             continue
         if name == "firefox":
             command = [programs["node"], str(ROOT / "scripts" / "firefox-smoke.cjs")]
-            environment = {"GECKODRIVER_BIN": programs["geckodriver"]}
+            environment = {"GECKODRIVER_BIN": programs["geckodriver"],
+                           "FIREFOX_BIN": programs["firefox"]}
         else:
             command = [programs["node"], str(ROOT / "scripts" / "browser-smoke.cjs")]
             environment = {"CHROME_BIN": programs[name]}
@@ -114,9 +117,10 @@ def current_checkout(invoke: Callable | None = None) -> tuple[str, str]:
     try:
         sha = invoke(["git", "rev-parse", "HEAD"])
         branch = invoke(["git", "branch", "--show-current"])
+        dirty = invoke(["git", "status", "--porcelain", "--untracked-files=no"])
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         raise ValueError("Cannot inspect local Git checkout") from error
-    if not SHA.fullmatch(sha) or branch != "develop":
+    if not SHA.fullmatch(sha) or branch != "develop" or dirty:
         raise ValueError("Expected cleanly identified develop branch")
     return branch, sha
 
