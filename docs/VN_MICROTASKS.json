@@ -50,7 +50,11 @@
       "acceptance_id": "ASR-04",
       "depends_on": [
         "VN-00-01"
-      ]
+      ],
+      "evidence_refs": [
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/226"
+      ],
+      "acceptance_note": "15.11 PR #226: lokalny benchmark WER/CER czyta referencję i wynik przez podwójny SHA-256 tego samego deskryptora; wykrywa nawet podmianę TXT o tej samej liczbie bajtów, pilnuje limitu 300kB, nie ujawnia tekstu. 7/7 CI PASS, squash develop 99deebdc4a546bdee470fb993369a3d26eab9f4f. Rzeczywisty porównawczy ASR na legalnej naturalnej mowie i docelowym CPU (WER/CER, RAM/czas) nadal NOT_RUN."
     },
     {
       "id": "VN-00-03",
@@ -138,11 +142,12 @@
       "depends_on": [
         "VN-00-04"
       ],
-      "acceptance_note": "PR #213: Tkinter GUI transcribe/start/resume captures source, model, CLI, language and audio track on main thread; worker does not read Tk variables, UI changes cannot alter in-flight parameters. Hosted real Tk Xvfb/Windows checks on source PR; NOT a real OBS ASR or physical Windows acceptance. PR #215: przy zakończeniu asynchronicznej transkrypcji GUI nie ładuje innego katalogu wskazanego w formularzu; porównuje kanoniczne ścieżki Windows 8.3/pełne, zachowuje zmianę wyboru i informuje gdzie odczytać wynik. Syntetyczne testy prawdziwych widgetów Tk, bez realnego OBS i fizycznego Windows. 15.11 PR #223: GitHub Actions zaliczył 121-minutowe OGG/Opus, rzeczywisty FFmpeg, checkpoint/resume i eksport do DOCX przy testowym ASR. Nie wykonano 2h+ naturalnej mowy z rzeczywistym modelem ani pomiarów RAM na docelowym CPU; HW nadal NOT_RUN.",
+      "acceptance_note": "PR #213: Tkinter GUI transcribe/start/resume captures source, model, CLI, language and audio track on main thread; worker does not read Tk variables, UI changes cannot alter in-flight parameters. Hosted real Tk Xvfb/Windows checks on source PR; NOT a real OBS ASR or physical Windows acceptance. PR #215: przy zakończeniu asynchronicznej transkrypcji GUI nie ładuje innego katalogu wskazanego w formularzu; porównuje kanoniczne ścieżki Windows 8.3/pełne, zachowuje zmianę wyboru i informuje gdzie odczytać wynik. Syntetyczne testy prawdziwych widgetów Tk, bez realnego OBS i fizycznego Windows. 15.11 PR #223: GitHub Actions zaliczył 121-minutowe OGG/Opus, rzeczywisty FFmpeg, checkpoint/resume i eksport do DOCX przy testowym ASR. Nie wykonano 2h+ naturalnej mowy z rzeczywistym modelem ani pomiarów RAM na docelowym CPU; HW nadal NOT_RUN. 15.11 PR #225: podtrzymano regresję 121min OGG/Opus, rzeczywisty FFmpeg oraz checkpoint/resume z syntetycznym ASR po zmianie kontroli stdout; 8/8 CI PASS, brak realnego 2h+ Whisper na komputerze właściciela i pomiarów RAM.",
       "evidence_refs": [
         "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/213",
         "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/215",
-        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/223"
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/223",
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/225"
       ]
     },
     {
@@ -156,14 +161,15 @@
       "depends_on": [
         "VN-00-04"
       ],
-      "acceptance_note": "PR #206: wspólna walidacja Unicode scalar (odrzucenie lone-surrogate U+D800–U+DFFF) w źródłach, poprawkach i eksporcie; testy Python+JS i brak częściowego zapisu, 7/7 CI PASS na commicie c6d040b453999de47de01e4e043ae8ab355bd164. Nadal wymagane realne odbiory sprzętowe / jakościowe / decyzja mobilna. PR #207: ujednolicony limit 10000 jednostek UTF-16 (Python/JS) i maks. 128 dla project.id, test 5000/5001 emoji oraz desktop 4 eksporty -> przenośny import; CI 7/7 PASS na 7569a19f2af344ec66b8d6c6b82279957d9ead42. Nie wykonano testów fizycznych ani benchmarku realnej mowy. PR #212: podwójny ograniczony odczyt lokalnego project/transcript/edits.json, SHA-256 tego samego deskryptora i kontrola podmiany ścieżki; Windows-kompatybilne porównanie metadanych `lstat`/`fstat`. Testy race same-size i zmiany ścieżki. CI 7/7 PASS na 82ae6a9950ebd85308e074c5c1b4f024407d3c8b; fizyczny test awarii dysku nadal NOT_RUN. PR #213: Tkinter GUI transcribe/start/resume captures source, model, CLI, language and audio track on main thread; worker does not read Tk variables, UI changes cannot alter in-flight parameters. Hosted real Tk Xvfb/Windows checks on source PR; NOT a real OBS ASR or physical Windows acceptance. 15.11 PR #222/#223: odmowa niestabilnych JSON po Whisper, ogromnych liczb/depth, nieprawidłowych znaków audio i UTF-8 FFprobe przed zapisaniem projektu. 8/8 + 8/8 CI PASS; realny test uszkodzonego OBS, pełnego dysku, modelu i prywatnego Windows nadal NOT_RUN.",
+      "acceptance_note": "PR #206: wspólna walidacja Unicode scalar (odrzucenie lone-surrogate U+D800–U+DFFF) w źródłach, poprawkach i eksporcie; testy Python+JS i brak częściowego zapisu, 7/7 CI PASS na commicie c6d040b453999de47de01e4e043ae8ab355bd164. Nadal wymagane realne odbiory sprzętowe / jakościowe / decyzja mobilna. PR #207: ujednolicony limit 10000 jednostek UTF-16 (Python/JS) i maks. 128 dla project.id, test 5000/5001 emoji oraz desktop 4 eksporty -> przenośny import; CI 7/7 PASS na 7569a19f2af344ec66b8d6c6b82279957d9ead42. Nie wykonano testów fizycznych ani benchmarku realnej mowy. PR #212: podwójny ograniczony odczyt lokalnego project/transcript/edits.json, SHA-256 tego samego deskryptora i kontrola podmiany ścieżki; Windows-kompatybilne porównanie metadanych `lstat`/`fstat`. Testy race same-size i zmiany ścieżki. CI 7/7 PASS na 82ae6a9950ebd85308e074c5c1b4f024407d3c8b; fizyczny test awarii dysku nadal NOT_RUN. PR #213: Tkinter GUI transcribe/start/resume captures source, model, CLI, language and audio track on main thread; worker does not read Tk variables, UI changes cannot alter in-flight parameters. Hosted real Tk Xvfb/Windows checks on source PR; NOT a real OBS ASR or physical Windows acceptance. 15.11 PR #222/#223: odmowa niestabilnych JSON po Whisper, ogromnych liczb/depth, nieprawidłowych znaków audio i UTF-8 FFprobe przed zapisaniem projektu. 8/8 + 8/8 CI PASS; realny test uszkodzonego OBS, pełnego dysku, modelu i prywatnego Windows nadal NOT_RUN. 15.11 PR #225: lokalne FFmpeg/FFprobe nie spoolują już dowolnego stdout na dysk; limit 2 MiB RAM i watchdog przerywa nadmierny wynik podczas trwania procesu, bez ujawnienia danych. 8/8 Linux/Windows/Chromium/121-min OGG/Opus stub CI PASS, squash 7b11b3ce2dbe82172e03a07ee2ccf760f52a358b. Fizyczny test pełnego dysku i realny Windows offline nadal NOT_RUN.",
       "evidence_refs": [
         "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/206",
         "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/207",
         "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/212",
         "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/213",
         "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/222",
-        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/223"
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/223",
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/225"
       ]
     },
     {
