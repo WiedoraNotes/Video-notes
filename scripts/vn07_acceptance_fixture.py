@@ -63,7 +63,14 @@ def synthetic_files() -> dict[str, bytes]:
     ).encode("utf-8")
     if malformed == small_payload:
         raise RuntimeError("Cannot construct duplicate-key test fixture")
+    audio = io.BytesIO()
+    with wave.open(audio, "wb") as output:
+        output.setnchannels(1)
+        output.setsampwidth(1)
+        output.setframerate(8000)
+        output.writeframes(bytes([128]) * (8000 * 4))
     files = {
+        "vn07-silent-four-seconds.wav": audio.getvalue(),
         "vn07-small.json": small_payload,
         "vn07-large-50000.json": large_payload,
         "vn07-corrections.json": patch,
