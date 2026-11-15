@@ -125,3 +125,9 @@ stronicowanie, wyszukiwanie końcowego segmentu oraz poprawkę
 zmieniającą wyniki wyszukania. Nie stanowi to testu ręcznej
 dostępności, fizycznego Windows/NVDA ani gwarancji płynności
 na konkretnym słabym urządzeniu. Treści nie są wysyłane do sieci.
+
+## Korekta limitów i pustych transkrypcji — 15.11.2026
+
+Bezpośrednie API parsera `parseExport` i `parseCorrections` (także przy osadzeniu adaptera w portalu) kontroluje teraz limit **20 MiB rzeczywistych bajtów UTF-8**, a nie wyłącznie długość łańcucha JavaScript w jednostkach UTF-16. Licznik jest ograniczony i nie tworzy dodatkowej ogromnej tablicy bajtów. Standardowy import pliku nadal oddzielnie kontroluje `File.size`, rozmiar odczytanej tablicy i poprawne kodowanie UTF-8.
+
+Dodatkowo przy poprawnym, ale pustym eksporcie (`segments: []`) przycisk nawigacji od czasu nagrania do wypowiedzi pozostaje nieaktywny, także po odczytaniu metadanych lokalnego WAV. Nie powstaje wyjątek w obsłudze kliknięcia. Testy Node obejmują oba błędy i zgodność zwykłych polskich treści. Zaliczenie tych testów ani CI nie oznacza fizycznego odbioru Windows/NVDA ani pełnego PASS etapu VN-07.
