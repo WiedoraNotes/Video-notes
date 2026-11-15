@@ -10,7 +10,12 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 from pathlib import Path
+
+# Support both `python -m scripts.vn07_acceptance_fixture` and direct Windows use.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from videonotes.errors import VideoNotesError
 from videonotes.mobile_contract import parse_portable_export
