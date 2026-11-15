@@ -92,10 +92,11 @@
       "depends_on": [
         "VN-00-01"
       ],
-      "acceptance_note": " PR #213: Tkinter GUI transcribe/start/resume captures source, model, CLI, language and audio track on main thread; worker does not read Tk variables, UI changes cannot alter in-flight parameters. Hosted real Tk Xvfb/Windows checks on source PR; NOT a real OBS ASR or physical Windows acceptance. PR #215: przy zakończeniu asynchronicznej transkrypcji GUI nie ładuje innego katalogu wskazanego w formularzu; porównuje kanoniczne ścieżki Windows 8.3/pełne, zachowuje zmianę wyboru i informuje gdzie odczytać wynik. Syntetyczne testy prawdziwych widgetów Tk, bez realnego OBS i fizycznego Windows.",
+      "acceptance_note": "PR #213: Tkinter GUI transcribe/start/resume captures source, model, CLI, language and audio track on main thread; worker does not read Tk variables, UI changes cannot alter in-flight parameters. Hosted real Tk Xvfb/Windows checks on source PR; NOT a real OBS ASR or physical Windows acceptance. PR #215: przy zakończeniu asynchronicznej transkrypcji GUI nie ładuje innego katalogu wskazanego w formularzu; porównuje kanoniczne ścieżki Windows 8.3/pełne, zachowuje zmianę wyboru i informuje gdzie odczytać wynik. Syntetyczne testy prawdziwych widgetów Tk, bez realnego OBS i fizycznego Windows. 15.11 PR #222 (8/8 CI PASS): wynik JSON whisper.cpp jest podwójnie odczytywany z kontrolą SHA-256; parser odrzuca niedozwolone liczby, wadliwy Unicode i niespójne czasy. CI wykonało prawdziwy whisper.cpp na syntetycznych TTS PL/EN, NIE na rzeczywistym nagraniu właściciela. Ręczne ASR MP4, WER/CER i fizyczny Windows nadal NOT_RUN.",
       "evidence_refs": [
         "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/213",
-        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/215"
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/215",
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/222"
       ]
     },
     {
@@ -108,7 +109,11 @@
       "acceptance_id": "ASR-02",
       "depends_on": [
         "VN-00-01"
-      ]
+      ],
+      "evidence_refs": [
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/223"
+      ],
+      "acceptance_note": "15.11 PR #223 (8/8 CI PASS): FFprobe odrzuca niedozwolone znaki w nazwie ścieżki audio, niepoprawny UTF-8 i nadmiernie zagnieżdżone metadane; test chroni przed utworzeniem częściowego projektu. CI obejmuje istniejące syntetyczne dwie ścieżki MKV oraz 121-min OGG/Opus ze stubem ASR. Prawdziwe dwie ścieżki OBS, ręczny wybór i fizyczny Windows NOT_RUN."
     },
     {
       "id": "VN-01-03",
@@ -133,10 +138,11 @@
       "depends_on": [
         "VN-00-04"
       ],
-      "acceptance_note": " PR #213: Tkinter GUI transcribe/start/resume captures source, model, CLI, language and audio track on main thread; worker does not read Tk variables, UI changes cannot alter in-flight parameters. Hosted real Tk Xvfb/Windows checks on source PR; NOT a real OBS ASR or physical Windows acceptance. PR #215: przy zakończeniu asynchronicznej transkrypcji GUI nie ładuje innego katalogu wskazanego w formularzu; porównuje kanoniczne ścieżki Windows 8.3/pełne, zachowuje zmianę wyboru i informuje gdzie odczytać wynik. Syntetyczne testy prawdziwych widgetów Tk, bez realnego OBS i fizycznego Windows.",
+      "acceptance_note": "PR #213: Tkinter GUI transcribe/start/resume captures source, model, CLI, language and audio track on main thread; worker does not read Tk variables, UI changes cannot alter in-flight parameters. Hosted real Tk Xvfb/Windows checks on source PR; NOT a real OBS ASR or physical Windows acceptance. PR #215: przy zakończeniu asynchronicznej transkrypcji GUI nie ładuje innego katalogu wskazanego w formularzu; porównuje kanoniczne ścieżki Windows 8.3/pełne, zachowuje zmianę wyboru i informuje gdzie odczytać wynik. Syntetyczne testy prawdziwych widgetów Tk, bez realnego OBS i fizycznego Windows. 15.11 PR #223: GitHub Actions zaliczył 121-minutowe OGG/Opus, rzeczywisty FFmpeg, checkpoint/resume i eksport do DOCX przy testowym ASR. Nie wykonano 2h+ naturalnej mowy z rzeczywistym modelem ani pomiarów RAM na docelowym CPU; HW nadal NOT_RUN.",
       "evidence_refs": [
         "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/213",
-        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/215"
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/215",
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/223"
       ]
     },
     {
@@ -150,12 +156,14 @@
       "depends_on": [
         "VN-00-04"
       ],
-      "acceptance_note": " PR #206: wspólna walidacja Unicode scalar (odrzucenie lone-surrogate U+D800–U+DFFF) w źródłach, poprawkach i eksporcie; testy Python+JS i brak częściowego zapisu, 7/7 CI PASS na commicie c6d040b453999de47de01e4e043ae8ab355bd164. Nadal wymagane realne odbiory sprzętowe / jakościowe / decyzja mobilna. PR #207: ujednolicony limit 10000 jednostek UTF-16 (Python/JS) i maks. 128 dla project.id, test 5000/5001 emoji oraz desktop 4 eksporty -> przenośny import; CI 7/7 PASS na 7569a19f2af344ec66b8d6c6b82279957d9ead42. Nie wykonano testów fizycznych ani benchmarku realnej mowy. PR #212: podwójny ograniczony odczyt lokalnego project/transcript/edits.json, SHA-256 tego samego deskryptora i kontrola podmiany ścieżki; Windows-kompatybilne porównanie metadanych `lstat`/`fstat`. Testy race same-size i zmiany ścieżki. CI 7/7 PASS na 82ae6a9950ebd85308e074c5c1b4f024407d3c8b; fizyczny test awarii dysku nadal NOT_RUN. PR #213: Tkinter GUI transcribe/start/resume captures source, model, CLI, language and audio track on main thread; worker does not read Tk variables, UI changes cannot alter in-flight parameters. Hosted real Tk Xvfb/Windows checks on source PR; NOT a real OBS ASR or physical Windows acceptance.",
+      "acceptance_note": "PR #206: wspólna walidacja Unicode scalar (odrzucenie lone-surrogate U+D800–U+DFFF) w źródłach, poprawkach i eksporcie; testy Python+JS i brak częściowego zapisu, 7/7 CI PASS na commicie c6d040b453999de47de01e4e043ae8ab355bd164. Nadal wymagane realne odbiory sprzętowe / jakościowe / decyzja mobilna. PR #207: ujednolicony limit 10000 jednostek UTF-16 (Python/JS) i maks. 128 dla project.id, test 5000/5001 emoji oraz desktop 4 eksporty -> przenośny import; CI 7/7 PASS na 7569a19f2af344ec66b8d6c6b82279957d9ead42. Nie wykonano testów fizycznych ani benchmarku realnej mowy. PR #212: podwójny ograniczony odczyt lokalnego project/transcript/edits.json, SHA-256 tego samego deskryptora i kontrola podmiany ścieżki; Windows-kompatybilne porównanie metadanych `lstat`/`fstat`. Testy race same-size i zmiany ścieżki. CI 7/7 PASS na 82ae6a9950ebd85308e074c5c1b4f024407d3c8b; fizyczny test awarii dysku nadal NOT_RUN. PR #213: Tkinter GUI transcribe/start/resume captures source, model, CLI, language and audio track on main thread; worker does not read Tk variables, UI changes cannot alter in-flight parameters. Hosted real Tk Xvfb/Windows checks on source PR; NOT a real OBS ASR or physical Windows acceptance. 15.11 PR #222/#223: odmowa niestabilnych JSON po Whisper, ogromnych liczb/depth, nieprawidłowych znaków audio i UTF-8 FFprobe przed zapisaniem projektu. 8/8 + 8/8 CI PASS; realny test uszkodzonego OBS, pełnego dysku, modelu i prywatnego Windows nadal NOT_RUN.",
       "evidence_refs": [
         "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/206",
         "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/207",
         "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/212",
-        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/213"
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/213",
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/222",
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/223"
       ]
     },
     {
@@ -460,9 +468,10 @@
       ],
       "evidence_refs": [
         "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/218",
-        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/219"
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/219",
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/221"
       ],
-      "acceptance_note": "Dostarczono syntetyczny zestaw testowy (PR #218) i skrypt automatycznej macierzy Chrome/Edge/Firefox dla fizycznego Windows (PR #219, 6/6 CI). AUTO PASS nie jest ręcznym WEB-01. Brakuje rzeczywistego przebiegu na docelowym Windows, odłączenia sieci i świadomego przeglądu; manual acceptance NOT_RUN, bez receipt."
+      "acceptance_note": "Dostarczono syntetyczny zestaw testowy (PR #218) i skrypt automatycznej macierzy Chrome/Edge/Firefox dla fizycznego Windows (PR #219, 6/6 CI). AUTO PASS nie jest ręcznym WEB-01. Brakuje rzeczywistego przebiegu na docelowym Windows, odłączenia sieci i świadomego przeglądu; manual acceptance NOT_RUN, bez receipt. 15.11 PR #221 (6/6 CI PASS): automatyczna macierz file:// Chrome/Edge/Firefox wymaga poprawnego Node 22+ i jednorazowego nonce-bound potwierdzenia po pełnym scenariuszu, nie tylko exit code 0. Fizyczny tester i ręczny WEB-01 nadal NOT_RUN."
     },
     {
       "id": "VN-07-03",
@@ -475,7 +484,7 @@
       "depends_on": [
         "VN-07-02"
       ],
-      "acceptance_note": "IN_PROGRESS test rzeczywistego Chromium/Chrome/Edge file:// z obserwacją prób HTTP(S) CDP i istniejącą automatyzacją 50k/focus; fizyczny Windows klawiatura i NVDA oraz całościowy przegląd prywatności nadal NOT_RUN. PR #202: wspólny stabilny podwójny odczyt paczek poprawek (desktop/mobilne), SHA-256 na jednym deskryptorze, kontrola tożsamości pliku, NaN/Infinity i symlink oraz test in-place podmiany przy tym samym rozmiarze; kodowy CI 7/7 PASS. Nie wykonano fizycznych testów NVDA/Windows klawiatury ani pełnego odbioru prywatności. PR #204: kontrolowane odrzucanie nadmiernie zagnieżdżonego JSON i liczby przekraczającej ograniczenia dekodera, bez tracebacka ani częściowego zapisu; regresje w CI. NIE jest to odbiór realnego modelu, fizycznych przeglądarek ani Android/iOS. PR #205: rygorystyczny odczyt UTF-8 File.arrayBuffer/TextDecoder(fatal=true) w importach transkrypcji i poprawek WWW; zachowano poprzedni dokument przy błędnych bajtach, przetestowano BOM/PL/emoji i limit 20MiB, 6/6 źródłowych kontroli CI PASS na kodzie 3eac651e92b30685c04c6c529a92db9420995230. Fizyczny Windows, NVDA i test hosta nadal NOT_RUN. PR #206: wspólna walidacja Unicode scalar (odrzucenie lone-surrogate U+D800–U+DFFF) w źródłach, poprawkach i eksporcie; testy Python+JS i brak częściowego zapisu, 7/7 CI PASS na commicie c6d040b453999de47de01e4e043ae8ab355bd164. Nadal wymagane realne odbiory sprzętowe / jakościowe / decyzja mobilna. PR #207: ujednolicony limit 10000 jednostek UTF-16 (Python/JS) i maks. 128 dla project.id, test 5000/5001 emoji oraz desktop 4 eksporty -> przenośny import; CI 7/7 PASS na 7569a19f2af344ec66b8d6c6b82279957d9ead42. Nie wykonano testów fizycznych ani benchmarku realnej mowy. PR #208: lokalne read-only polecenie handoff-audit porównuje źródło z bieżącym projektem, waliduje paczkę przez adapter mobilny i desktop, ponawia SHA/stan; test integracyjny pełnego obiegu z patch --apply jako osobnym krokiem. 8/8 CI PASS na f6786cd92c40579387f1d9c74a15ac7caeef003f. Faktyczny odbiór sprzętowy/NVDA i host Wiedora pozostaje NOT_RUN. PR #209: test syntetycznych 50 000 segmentów z wyszukiwaniem i poprawką ostatniego wiersza, optymalizacja searchPrepared() tylko dla plików parseExport (WeakSet); publiczne search() nadal waliduje obce dane. Kod 08335200a470c6e3adab383ab6472b79f134df57 miał 6/6 GitHub CI PASS. Testy wydajności na fizycznym Windows/NVDA nadal NOT_RUN. 15.11 PR #216–218: kontrola prawdziwej długości UTF-8, zagnieżdżenia JSON, pustej transkrypcji i prywatnego rejestru testów. PR #219: uruchamiana lokalnie macierz 3 przeglądarek, czysta gałąź, zabezpieczone raporty bez danych osobowych; 6/6 CI PASS, squash develop d85802ee49b933476fff138f8d7102f8d5715675. To jedynie preflight: NVDA, ręczna klawiatura/zoom i WEB-02 na fizycznym urządzeniu NOT_RUN.",
+      "acceptance_note": "IN_PROGRESS test rzeczywistego Chromium/Chrome/Edge file:// z obserwacją prób HTTP(S) CDP i istniejącą automatyzacją 50k/focus; fizyczny Windows klawiatura i NVDA oraz całościowy przegląd prywatności nadal NOT_RUN. PR #202: wspólny stabilny podwójny odczyt paczek poprawek (desktop/mobilne), SHA-256 na jednym deskryptorze, kontrola tożsamości pliku, NaN/Infinity i symlink oraz test in-place podmiany przy tym samym rozmiarze; kodowy CI 7/7 PASS. Nie wykonano fizycznych testów NVDA/Windows klawiatury ani pełnego odbioru prywatności. PR #204: kontrolowane odrzucanie nadmiernie zagnieżdżonego JSON i liczby przekraczającej ograniczenia dekodera, bez tracebacka ani częściowego zapisu; regresje w CI. NIE jest to odbiór realnego modelu, fizycznych przeglądarek ani Android/iOS. PR #205: rygorystyczny odczyt UTF-8 File.arrayBuffer/TextDecoder(fatal=true) w importach transkrypcji i poprawek WWW; zachowano poprzedni dokument przy błędnych bajtach, przetestowano BOM/PL/emoji i limit 20MiB, 6/6 źródłowych kontroli CI PASS na kodzie 3eac651e92b30685c04c6c529a92db9420995230. Fizyczny Windows, NVDA i test hosta nadal NOT_RUN. PR #206: wspólna walidacja Unicode scalar (odrzucenie lone-surrogate U+D800–U+DFFF) w źródłach, poprawkach i eksporcie; testy Python+JS i brak częściowego zapisu, 7/7 CI PASS na commicie c6d040b453999de47de01e4e043ae8ab355bd164. Nadal wymagane realne odbiory sprzętowe / jakościowe / decyzja mobilna. PR #207: ujednolicony limit 10000 jednostek UTF-16 (Python/JS) i maks. 128 dla project.id, test 5000/5001 emoji oraz desktop 4 eksporty -> przenośny import; CI 7/7 PASS na 7569a19f2af344ec66b8d6c6b82279957d9ead42. Nie wykonano testów fizycznych ani benchmarku realnej mowy. PR #208: lokalne read-only polecenie handoff-audit porównuje źródło z bieżącym projektem, waliduje paczkę przez adapter mobilny i desktop, ponawia SHA/stan; test integracyjny pełnego obiegu z patch --apply jako osobnym krokiem. 8/8 CI PASS na f6786cd92c40579387f1d9c74a15ac7caeef003f. Faktyczny odbiór sprzętowy/NVDA i host Wiedora pozostaje NOT_RUN. PR #209: test syntetycznych 50 000 segmentów z wyszukiwaniem i poprawką ostatniego wiersza, optymalizacja searchPrepared() tylko dla plików parseExport (WeakSet); publiczne search() nadal waliduje obce dane. Kod 08335200a470c6e3adab383ab6472b79f134df57 miał 6/6 GitHub CI PASS. Testy wydajności na fizycznym Windows/NVDA nadal NOT_RUN. 15.11 PR #216–218: kontrola prawdziwej długości UTF-8, zagnieżdżenia JSON, pustej transkrypcji i prywatnego rejestru testów. PR #219: uruchamiana lokalnie macierz 3 przeglądarek, czysta gałąź, zabezpieczone raporty bez danych osobowych; 6/6 CI PASS, squash develop d85802ee49b933476fff138f8d7102f8d5715675. To jedynie preflight: NVDA, ręczna klawiatura/zoom i WEB-02 na fizycznym urządzeniu NOT_RUN. 15.11 PR #221: wyniki automatycznej macierzy wymagają losowego nonce oraz rozpoznanego scenariusza, raport nie zawiera prywatnych danych i nie przyznaje WEB-02/NVDA PASS. CI 6/6 PASS, fizyczne klawiatura/zoom/NVDA/prywatność nadal NOT_RUN.",
       "evidence_refs": [
         "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/195",
         "https://github.com/testowyemailaplikacja-spec/Video-notes/blob/chatgpt/kwn-vn00-vn06-vn07-preflight-20261114/docs/KWN_AUTOMATED_PREFLIGHT_20261114.md",
@@ -489,7 +498,8 @@
         "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/216",
         "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/217",
         "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/218",
-        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/219"
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/219",
+        "https://github.com/testowyemailaplikacja-spec/Video-notes/pull/221"
       ]
     },
     {
