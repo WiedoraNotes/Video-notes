@@ -7,10 +7,12 @@ It does not read recordings, upload files, or modify VN_STATUS.json.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
 import re
+import stat
 from collections import Counter
 from datetime import date
 from pathlib import Path
@@ -165,6 +167,83 @@ def evaluate(payload: dict) -> dict:
     }
 
 
+def _unique_evidence_keys(pairs: list[tuple[str, object]]) -> dict:
+    """Ambiguous root/entry fields must never produce a positive self-report."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate keys in local evidence JSON")
+        result[key] = value
+    return result
+
+
+def _invalid_json_constant(_value: str) -> None:
+    raise ValueError("Invalid non-finite JSON constant")
+
+
+def load_private_evidence(path: Path) -> object:
+    """Read only regular, unchanged local files, bounded to 2 MiB.
+
+    No content, path or person's name is returned to the CLI on failure.
+    Both reads use one descriptor; post-read lstat rejects swapped paths.
+    This validates local metadata, not the authenticity of physical tests.
+    """
+    path = Path(path).expanduser()
+    if path.is_symlink():
+        raise ValueError("Unsafe local evidence file")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags)
+        try:
+            before = os.fstat(fd)
+            if not stat.S_ISREG(before.st_mode):
+                raise ValueError("Evidence must be a regular file")
+            if before.st_size > MAX_EVIDENCE_BYTES:
+                raise ValueError("Evidence file exceeds 2 MiB")
+            chunks = bytearray()
+            digest = hashlib.sha256()
+            while True:
+                block = os.read(fd, min(64 * 1024, MAX_EVIDENCE_BYTES + 1 - len(chunks)))
+                if not block:
+                    break
+                chunks.extend(block)
+                digest.update(block)
+                if len(chunks) > MAX_EVIDENCE_BYTES:
+                    raise ValueError("Evidence file exceeds 2 MiB")
+            os.lseek(fd, 0, os.SEEK_SET)
+            check = hashlib.sha256()
+            checked_bytes = 0
+            while True:
+                block = os.read(fd, min(64 * 1024, MAX_EVIDENCE_BYTES + 1 - checked_bytes))
+                if not block:
+                    break
+                check.update(block)
+                checked_bytes += len(block)
+                if checked_bytes > MAX_EVIDENCE_BYTES:
+                    raise ValueError("Evidence file exceeds 2 MiB")
+            after = os.fstat(fd)
+            if (checked_bytes != len(chunks) or digest.digest() != check.digest()
+                    or any(getattr(before, field) != getattr(after, field)
+                           for field in ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns"))
+                    or len(chunks) != after.st_size):
+                raise ValueError("Evidence file changed during read")
+        finally:
+            os.close(fd)
+        visible = path.lstat()
+    except OSError as error:
+        raise ValueError("Cannot safely read local evidence file") from error
+    if (not stat.S_ISREG(visible.st_mode)
+            or visible.st_dev != after.st_dev or visible.st_ino != after.st_ino
+            or visible.st_size != after.st_size or visible.st_mtime_ns != after.st_mtime_ns):
+        raise ValueError("Evidence path changed during read")
+    try:
+        return json.loads(bytes(chunks).decode("utf-8-sig"),
+                          object_pairs_hook=_unique_evidence_keys,
+                          parse_constant=_invalid_json_constant)
+    except (UnicodeError, ValueError, RecursionError) as error:
+        raise ValueError("Cannot parse unambiguous local evidence JSON") from error
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Privacy-minimal manual KWN acceptance evidence")
     group = parser.add_mutually_exclusive_group(required=True)
@@ -182,11 +261,12 @@ def main() -> int:
         print("Local NOT_RUN template created. Keep it private.")
         return 0
     try:
-        if args.check.stat().st_size > MAX_EVIDENCE_BYTES:
+        payload = load_private_evidence(args.check)
+    except ValueError as error:
+        # Print only a generic error category, never private JSON or file paths.
+        if "2 MiB" in str(error):
             parser.error("Evidence file exceeds 2 MiB; cannot inspect safely")
-        payload = json.loads(args.check.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        parser.error("Cannot load local JSON evidence")
+        parser.error("Cannot safely load unambiguous local JSON evidence")
     report = evaluate(payload)
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if report["valid"] else 1
