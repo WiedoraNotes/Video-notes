@@ -117,21 +117,22 @@
     };
   }
   // JSON.parse silently keeps only the LAST occurrence of a duplicate
-  // property. The Python desktop patch importer refuses duplicates; keep the
-  // browser's import rules identical. Syntax is parsed FIRST by JSON.parse;
-  // this bounded scan only tracks keys inside objects (never string values).
+  // property. First run a bounded lexical scan BEFORE native JSON.parse, so
+  // untrusted nested arrays cannot allocate extremely deep object graphs.
+  // Track object keys only, never brackets or key-like text inside strings.
+  var MAX_JSON_NESTING = 64;
   function parseUniqueJSON(source) {
     // Python's portable import accepts a UTF-8 BOM. File.text() preserves
     // it, but JSON.parse does not. Normalize ONLY a single leading BOM.
     if (source.charCodeAt(0) === 0xFEFF) source = source.slice(1);
-    var parsed = JSON.parse(source);
     var frames = [];
     for (var i = 0; i < source.length; i += 1) {
       var symbol = source[i];
-      if (symbol === '{') {
-        frames.push({kind: 'object', keys: new Set()});
-      } else if (symbol === '[') {
-        frames.push({kind: 'array'});
+      if (symbol === '{' || symbol === '[') {
+        if (frames.length >= MAX_JSON_NESTING) {
+          reject("Zbyt głęboki JSON w pliku KWN.");
+        }
+        frames.push(symbol === '{' ? {kind: 'object', keys: new Set()} : {kind: 'array'});
       } else if (symbol === '}' || symbol === ']') {
         frames.pop();
       } else if (symbol === '"') {
@@ -154,7 +155,9 @@
         }
       }
     }
-    return parsed;
+    // Only parse after the source has passed the nesting and duplicate-key
+    // checks. JSON.parse remains authoritative for the full JSON grammar.
+    return JSON.parse(source);
   }
 
   function parseExport(source) {
@@ -163,7 +166,8 @@
     }
     var parsed;
     try { parsed = parseUniqueJSON(source); }
-    catch (error) { if (error.message.includes("Zduplikowany klucz JSON")) throw error; reject("Plik nie jest poprawnym JSON."); }
+    catch (error) { if (error.message.includes("Zduplikowany klucz JSON") ||
+                       error.message.includes("Zbyt głęboki JSON")) throw error; reject("Plik nie jest poprawnym JSON."); }
     var validated = validateExport(parsed);
     preparedDocuments.add(validated);
     return validated;
@@ -270,7 +274,8 @@
     }
     var patch;
     try { patch = parseUniqueJSON(source); }
-    catch (error) { if (error.message.includes("Zduplikowany klucz JSON")) throw error; reject("Plik poprawek nie jest poprawnym JSON."); }
+    catch (error) { if (error.message.includes("Zduplikowany klucz JSON") ||
+                       error.message.includes("Zbyt głęboki JSON")) throw error; reject("Plik poprawek nie jest poprawnym JSON."); }
     if (!plainObject(patch) ||
         Object.keys(patch).sort().join(",") !== "changes,project_id,schema" ||
         patch.schema !== "videonotes-web-corrections-v1" ||

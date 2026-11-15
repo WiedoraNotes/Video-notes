@@ -681,3 +681,22 @@ test("empty transcript never enables playhead lookup even when local media is re
   assert.doesNotThrow(() => ux.elements["jump-playhead"].events.click());
   assert.match(ux.elements["match-count"].textContent, /^0 z 0/);
 });
+
+test("deep JSON import and patch cannot replace user corrections in offline controller", async () => {
+  const ux = boot();
+  await ux.importFile(source("saved", 2));
+  ux.select(0);
+  ux.elements["edit-text"].value = "Zapisana korekta bez utraty";
+  ux.elements["save-edit"].events.click();
+  const deep = "[".repeat(15000) + "0" + "]".repeat(15000);
+  ux.state.allow = true;
+  await ux.importFile(source("untrusted", 1), async () => deep);
+  assert.match(ux.elements["status"].textContent, /Zbyt głęboki JSON/);
+  assert.match(ux.elements["match-count"].textContent, /^2 z 2/);
+  assert.equal(ux.elements["edit-text"].value, "Zapisana korekta bez utraty");
+  await ux.importPatch(source("saved", 2), async () => deep);
+  assert.match(ux.elements["status"].textContent, /Zbyt głęboki JSON/);
+  assert.match(ux.elements["match-count"].textContent, /^2 z 2/);
+  assert.equal(ux.elements["edit-text"].value, "Zapisana korekta bez utraty");
+  assert.equal(unload(ux).prevented, true);
+});
