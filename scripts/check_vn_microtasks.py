@@ -305,7 +305,9 @@ def main() -> int:
         print(json.dumps({"valid": False, "errors": errors}, indent=2))
         return 1
     result = handoff(queue, stage_ledger) if args.handoff else summary(queue, stage_ledger)
-    print(json.dumps({"valid": True, **result}, ensure_ascii=False, indent=2))
+    # ASCII-safe wire JSON works under Windows cp1252/cp437 as well as UTF-8.
+    # The receiving parser reconstructs the original Unicode task titles.
+    print(json.dumps({"valid": True, **result}, ensure_ascii=bool(args.handoff), indent=2))
     return 0
 
 
