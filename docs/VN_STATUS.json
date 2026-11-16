@@ -1,7 +1,7 @@
 {
   "schema": "videonotes-progress-v1",
-  "updated_date": "2026-11-15",
-  "owner_repo": "testowyemailaplikacja-spec/Video-notes",
+  "updated_date": "2026-11-16",
+  "owner_repo": "WiedoraNotes/Video-notes",
   "integration_policy": "Develop KWN/Video-notes only. Constant_app and Netlify get only later, independently accepted larger batches.",
   "main_unchanged": "4da53b3bff580e07a16218e5f7017cecf8ff7aed",
   "historical_note": "Historical KWN 189 criteria / 22 phases tracked in Constant_app are a separate ledger and are not carried over as DONE.",

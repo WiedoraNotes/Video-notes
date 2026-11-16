@@ -20,11 +20,19 @@ from pathlib import Path
 SCHEMA = "videonotes-manual-evidence-v1"
 MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
 MAX_EVIDENCE_ENTRIES = 512
-REPO = "testowyemailaplikacja-spec/Video-notes"
-EVIDENCE_LINK = re.compile(
-    r"https://github\.com/testowyemailaplikacja-spec/Video-notes/"
-    r"(?:issues|pull|actions/runs)/[0-9]+\Z"
-)
+REPO = "WiedoraNotes/Video-notes"
+SOURCE_REPOS = (REPO, "testowyemailaplikacja-spec/Video-notes")
+PORTAL_REPOS = ("wiedoraWeb/Constant_app", "testowyemailaplikacja-spec/Constant_app")
+
+
+def valid_evidence_link(value: object, kind: str) -> bool:
+    """Accept current or historical metadata, scoped to source versus host."""
+    repos = PORTAL_REPOS if kind == "PORTAL_REVIEW" else SOURCE_REPOS
+    return isinstance(value, str) and any(
+        re.fullmatch(r"https://github[.]com/" + re.escape(repo)
+                     + r"/(?:issues|pull|actions/runs)/[1-9][0-9]*", value) is not None
+        for repo in repos
+    )
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 ALLOWED_FIELDS = {
@@ -105,7 +113,7 @@ def validate(payload: object) -> list[str]:
             errors.append(prefix + ": missing/invalid commit SHA")
         if row.get("attested_by_human") is not True:
             errors.append(prefix + ": no explicit human attestation")
-        if not isinstance(row.get("evidence_url"), str) or not EVIDENCE_LINK.fullmatch(row["evidence_url"]):
+        if not valid_evidence_link(row.get("evidence_url"), kind):
             errors.append(prefix + ": missing/invalid public *metadata-only* GitHub evidence URL")
         if "sample_sha256" in row and (
             not isinstance(row["sample_sha256"], str)

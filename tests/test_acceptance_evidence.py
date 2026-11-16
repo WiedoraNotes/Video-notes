@@ -31,6 +31,27 @@ class ManualAcceptanceTests(unittest.TestCase):
         }
         return row
 
+
+    def test_migrated_evidence_urls_are_scoped_and_legacy_supported(self):
+        payload = {"schema": "videonotes-manual-evidence-v1", "entries": []}
+        row = self.make_pass("HW-01", "PHYSICAL_WINDOWS")
+        payload["entries"] = [row]
+        self.assertEqual(validate(payload), [])
+        row["evidence_url"] = "https://github.com/WiedoraNotes/Video-notes/issues/95"
+        self.assertEqual(validate(payload), [])
+        row["evidence_url"] = "https://github.com/wiedoraWeb/Constant_app/issues/95"
+        self.assertTrue(validate(payload))
+        row = self.make_pass("HOST-01", "PORTAL_REVIEW")
+        payload["entries"] = [row]
+        row["evidence_url"] = "https://github.com/wiedoraWeb/Constant_app/issues/95"
+        self.assertEqual(validate(payload), [])
+        row["evidence_url"] = "https://github.com/testowyemailaplikacja-spec/Constant_app/issues/95"
+        self.assertEqual(validate(payload), [])
+        row["evidence_url"] = "https://github.com/WiedoraNotes/Video-notes/issues/95"
+        self.assertTrue(validate(payload))
+        row["evidence_url"] = "https://github.com/wiedoraWeb/Constant_app/issues/00"
+        self.assertTrue(validate(payload))
+
     def test_ci_cannot_claim_physical_success(self):
         row = self.make_pass("HW-01", "CI")
         self.assertTrue(any("unrecognized case/kind" in e for e in validate({"schema": "videonotes-manual-evidence-v1", "entries": [row]})))

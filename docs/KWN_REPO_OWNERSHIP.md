@@ -1,9 +1,9 @@
-# KWN / Video Notes — zasada jednego repozytorium
+# KWN / Video Notes — aktualne repozytoria
 
-**Potwierdzenie właściciela 06.11.2026:** `testowyemailaplikacja-spec/Video-notes` jest właściwym repozytorium roboczym Konwertera Notatek (KWN). Rozwój i testy funkcjonalne prowadzić tylko tutaj. Istniejąca beta na portalu Wiedora `develop` może pozostać widoczna, ale nie jest bieżącym źródłem kodu programu.
+**Decyzja właściciela 16.11.2026:** `WiedoraNotes/Video-notes` jest jedynym głównym repozytorium rozwoju KWN. Gałąź `develop` obejmuje kod Windows, ASR, notatki, adapter WWW, testy i rejestry `docs/VN_STATUS.json` oraz `docs/VN_MICROTASKS.json`. `main` pozostaje stabilnym punktem odniesienia.
 
-**Video-notes / develop**: transkrypcja, edycja, notatki, Windows, ASR, modele, adaptery, testy i PR-y. **Video-notes / main**: stabilny kod. **Constant_app / develop**: dopiero większe zatwierdzone pakiety, testy pasywne portalu (linki, izolacja, bezpieczeństwo), zbiorcza publikacja Netlify. **Constant_app / main**: bez automatycznego wydania.
+**Miejsce praktycznych testów i integracji:** `wiedoraWeb/Constant_app` na gałęzi `develop`. Integracja hosta jest odbierana osobno. Istniejący PR #246 należy zweryfikować przed jakimkolwiek scaleniem. Nie modyfikować produkcyjnej Wiedory w ramach prac nad samym silnikiem KWN.
 
-**Dwa plany mają odrębny status.** Historyczny rejestr w `Constant_app` liczył 189 kryteriów / 22 etapy, a `Video-notes` ma VN-00–VN-08. Nie łączyć ich liczników automatycznie i nie przenosić statusów DONE bez dowodów dla właściwego kodu. Konwerter Plików PDF/DOCX to oddzielny program.
+**Historia:** wcześniejsze repozytoria `testowyemailaplikacja-spec/Video-notes` i `testowyemailaplikacja-spec/Constant_app` to od 16.11.2026 źródła historycznych PR-ów, SHA i raportów. Zachować autentyczne odnośniki jako dowody. Nowe implementacje i nowe odbiory rejestrować na kontach WiedoraNotes/wiedoraWeb. Sama migracja nie potwierdza nowych testów.
 
-**Status 06.11.2026:** PR #1 scalony do develop; prototyp OBS/FFmpeg → lokalny adapter ASR → checkpointy → eksport i wstępny GUI. Lokalne 19/19 testów PASS, GitHub Actions Linux/Windows PASS na dostępnych testach. Brak jeszcze prawdziwego testu modelu PL, pełnej instalacji Windows offline i formalnego zamknięcia VN-00/VN-01. Patrz `docs/VN00_IMPLEMENTATION.md`.
+**Osobne plany:** VN-00–VN-08 to 9 etapów i 37 mikrozadań. Dawne 189 kryteriów i 22 etapy Wiedory nie mogą być dodawane do nowych liczników. Bez naturalnej mowy, sprzętu, legal review i niezależnego podpisanego odbioru etap nie otrzymuje DONE. Konwerter plików pozostaje oddzielnym projektem.

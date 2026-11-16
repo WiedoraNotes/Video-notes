@@ -29,7 +29,7 @@ Nie uruchamiaj na publicznym runnerze z prywatnym plikiem. `--init` odmawia nadp
   "cer": 0.08,
   "elapsed_seconds": 85.5,
   "peak_ram_mb": 1200,
-  "evidence_url": "https://github.com/testowyemailaplikacja-spec/Video-notes/issues/95"
+  "evidence_url": "https://github.com/WiedoraNotes/Video-notes/issues/95"
 }
 ```
 
@@ -60,3 +60,7 @@ Narzędzie nie poświadcza autentyczności podpisów ani wyników testów. Wszel
 Rejestr w `docs/VN_MICROTASKS.json` może przyjąć `acceptance_receipt` **dopiero po faktycznym odbiorze**. Wymagane pola: `schema: videonotes-human-acceptance-v1`, `case_id` identyczne z `acceptance_id`, `kind` zgodne z rolą zadania, `decision: APPROVED`, data testu, SHA zweryfikowanego commita, `attested_by_human: true`, `independently_reviewed: true` i `evidence_url` wskazujące istniejący GitHub Issue zawierający wyłącznie zanonimizowane metadane. Identyczny URL należy dodać do `evidence_refs`. Dodatkowo `PORTAL` wymaga `deployed_sha`, `environment_verified: true` oraz linku do pełnego przebiegu GitHub Actions Wiedory.
 
 **To kontrola poprawności struktury, nie weryfikacja autentyczności.** Same wartości `true`, SHA i link do Issue można wpisać bez realnego testu. Odbierający musi niezależnie sprawdzić faktyczny sprzęt, przebieg, środowisko, prawa/licencje, wyniki CI i datę. Nie wolno wpisywać fikcyjnych pól ani surowych transkrypcji, nazwisk, lokalizacji, danych konta czy nagrań do Issue. Po zaliczeniu każdego testu należy też sprawdzić zależności i dopiero wtedy świadomie zmienić zadanie na DONE. Nie działa żadne automatyczne promowanie etapów.
+
+## Nowe repozytoria po 16.11.2026
+
+Dowody dotyczące silnika KWN należy odtąd rejestrować w `WiedoraNotes/Video-notes`, a odbiory `HOST-01` w `wiedoraWeb/Constant_app`. Historyczne anonimizowane dowody z `testowyemailaplikacja-spec` pozostają dozwolone tylko we właściwym obszarze. Zmiana repozytorium nie stanowi akceptacji testu. Dla zadań sprzętowych dowód w repozytorium hosta nie jest równoważny z fizycznym testem Windows, a PR nie zastępuje podpisanego `acceptance_receipt`.

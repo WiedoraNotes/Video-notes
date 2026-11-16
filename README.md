@@ -2,7 +2,7 @@
 
 **Samodzielna aplikacja do transkrypcji i tworzenia notatek z nagrań oraz dźwięku na żywo.**
 
-Video Notes powstaje na bazie doświadczeń modułu **[Notatki](https://github.com/testowyemailaplikacja-spec/Constant_app/tree/develop/apps/notatki)** z platformy Wiedora (Constant App). **Konwerter plików jest osobnym projektem i nie wchodzi w zakres Video Notes.**
+Video Notes powstaje na bazie doświadczeń modułu **[Notatki](https://github.com/wiedoraWeb/Constant_app/tree/develop/apps/notatki)** z platformy Wiedora (Constant App). **Konwerter plików jest osobnym projektem i nie wchodzi w zakres Video Notes.**
 
 ## Aktualne moduły KWN / Video Notes (06.11.2026)
 

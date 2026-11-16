@@ -134,6 +134,51 @@ class MicrotaskAuditTests(unittest.TestCase):
         self.assertEqual(validate_acceptance_receipt(task), [])
 
 
+    def test_ledger_must_reference_new_repo(self):
+        queue = copy.deepcopy(self.queue)
+        queue["repository"] = "testowyemailaplikacja-spec/Video-notes"
+        self.assertTrue(any("Microtask ledger repository mismatch" in e for e in audit(queue, self.phases)))
+        phases = copy.deepcopy(self.phases)
+        phases["owner_repo"] = "testowyemailaplikacja-spec/Video-notes"
+        self.assertTrue(any("Stage ledger repository mismatch" in e for e in audit(self.queue, phases)))
+
+    def test_current_and_historical_receipts_require_proper_repo(self):
+        task = copy.deepcopy(next(t for t in self.queue["tasks"] if t["id"] == "VN-07-02"))
+        current = "https://github.com/WiedoraNotes/Video-notes/issues/95"
+        legacy = "https://github.com/testowyemailaplikacja-spec/Video-notes/issues/95"
+        task["evidence_refs"] = [current, legacy]
+        task["acceptance_receipt"] = {
+            "schema": "videonotes-human-acceptance-v1", "case_id": "WEB-01",
+            "kind": "PHYSICAL_WINDOWS", "decision": "APPROVED",
+            "checked_at": "2026-11-15", "verified_commit": "a" * 40,
+            "attested_by_human": True, "independently_reviewed": True,
+            "evidence_url": current,
+        }
+        self.assertEqual(validate_acceptance_receipt(task), [])
+        task["acceptance_receipt"]["evidence_url"] = legacy
+        self.assertEqual(validate_acceptance_receipt(task), [])
+        task["acceptance_receipt"]["evidence_url"] = "https://github.com/wiedoraWeb/Constant_app/issues/95"
+        self.assertTrue(validate_acceptance_receipt(task))
+        task["acceptance_receipt"]["evidence_url"] = "https://github.com/WiedoraNotes/Video-notes/pull/95"
+        self.assertTrue(validate_acceptance_receipt(task))
+
+    def test_portal_receipt_requires_portal_issue_and_full_regression(self):
+        task = copy.deepcopy(next(t for t in self.queue["tasks"] if t["id"] == "VN-07-05"))
+        issue = "https://github.com/wiedoraWeb/Constant_app/issues/95"
+        task["evidence_refs"] = [issue]
+        task["acceptance_receipt"] = {
+            "schema": "videonotes-human-acceptance-v1", "case_id": "HOST-01",
+            "kind": "PORTAL_REVIEW", "decision": "APPROVED",
+            "checked_at": "2026-11-15", "verified_commit": "a" * 40,
+            "attested_by_human": True, "independently_reviewed": True,
+            "evidence_url": issue, "deployed_sha": "b" * 40,
+            "environment_verified": True,
+            "full_regression_url": "https://github.com/wiedoraWeb/Constant_app/actions/runs/95",
+        }
+        self.assertEqual(validate_acceptance_receipt(task), [])
+        task["acceptance_receipt"]["full_regression_url"] = "https://github.com/WiedoraNotes/Video-notes/actions/runs/95"
+        self.assertTrue(any("full-regression" in e for e in validate_acceptance_receipt(task)))
+
 
 if __name__ == "__main__":
     unittest.main()

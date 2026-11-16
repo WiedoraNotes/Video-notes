@@ -1,7 +1,7 @@
 {
   "schema": "videonotes-microtasks-v1",
-  "updated_date": "2026-11-15",
-  "repository": "testowyemailaplikacja-spec/Video-notes",
+  "updated_date": "2026-11-16",
+  "repository": "WiedoraNotes/Video-notes",
   "base_branch": "develop",
   "historical_ledger_note": "189/22 Constant_app KWN criteria are a separate historical ledger; do not mix totals.",
   "source_of_truth": "docs/VN_STATUS.json",
