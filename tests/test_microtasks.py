@@ -6,7 +6,7 @@ import json
 import unittest
 from pathlib import Path
 
-from scripts.check_vn_microtasks import ROOT, audit, summary, validate_acceptance_receipt
+from scripts.check_vn_microtasks import ROOT, audit, handoff, summary, validate_acceptance_receipt
 
 
 class MicrotaskAuditTests(unittest.TestCase):
@@ -178,6 +178,50 @@ class MicrotaskAuditTests(unittest.TestCase):
         self.assertEqual(validate_acceptance_receipt(task), [])
         task["acceptance_receipt"]["full_regression_url"] = "https://github.com/WiedoraNotes/Video-notes/actions/runs/95"
         self.assertTrue(any("full-regression" in e for e in validate_acceptance_receipt(task)))
+
+    def test_handoff_sends_only_portal_to_strict_work_and_preserves_all_statuses(self):
+        queue = copy.deepcopy(self.queue)
+        before = json.dumps(queue, sort_keys=True)
+        report = handoff(queue, self.phases)
+        self.assertEqual(report["remaining_count"], 35)
+        self.assertEqual(report["work"]["count"], 1)
+        self.assertEqual(report["work"]["dependency_ready_count"], 0)
+        self.assertEqual(report["non_work"]["count"], 34)
+        self.assertEqual(report["counts_by_owner"]["HUMAN_TEST"], 24)
+        self.assertEqual(report["counts_by_owner"]["DEV"], 2)
+        self.assertEqual(report["work"]["tasks"][0]["id"], "VN-07-05")
+        self.assertEqual(report["work"]["tasks"][0]["unmet_dependencies"],
+                         ["VN-07-03", "VN-06-04"])
+        self.assertIn("VN-07-03", report["work_assist_only"])
+        self.assertIsNone(report["verified_commit_sha"])
+        self.assertFalse(report["formal_acceptance_completed_by_this_report"])
+        self.assertEqual(json.dumps(queue, sort_keys=True), before)
+
+    def test_handoff_dependency_ready_is_not_formal_approval(self):
+        report = handoff(self.queue, self.phases)
+        step = next(x for x in report["non_work"]["tasks"] if x["id"] == "VN-07-02")
+        self.assertTrue(step["dependency_ready"])
+        self.assertTrue(step["requires_independent_evidence_review"])
+        self.assertIsNone(step["verified_implementation_sha"])
+        self.assertNotIn("VN-07-01", [x["id"] for x in report["non_work"]["tasks"]])
+        queue = copy.deepcopy(self.queue)
+        queue["repository"] = "testowyemailaplikacja-spec/Video-notes"
+        with self.assertRaises(ValueError):
+            handoff(queue, self.phases)
+
+    def test_handoff_cli_is_read_only_and_valid_json(self):
+        import subprocess
+        import sys
+        response = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "check_vn_microtasks.py"), "--handoff"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+            timeout=15, cwd=ROOT, text=True,
+        )
+        self.assertEqual(response.returncode, 0, response.stderr)
+        data = json.loads(response.stdout)
+        self.assertTrue(data["valid"])
+        self.assertEqual(data["schema"], "videonotes-operator-handoff-v1")
+        self.assertEqual(data["work"]["dependency_ready_count"], 0)
 
 
 if __name__ == "__main__":
