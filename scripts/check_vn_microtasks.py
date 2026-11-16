@@ -220,10 +220,83 @@ def summary(queue: dict, stage_ledger: dict) -> dict:
     }
 
 
+
+def handoff(queue: dict, stage_ledger: dict) -> dict:
+    """Generate a conservative, metadata-only handoff from validated ledgers.
+
+    No remote checks, filesystem writes, external permissions or unearned DONE.
+    Only PORTAL is a strictly Work-relevant owner category; physical hardware,
+    editorial/legal review and product decisions stay with the operator.
+    """
+    if audit(queue, stage_ledger):
+        raise ValueError("Cannot create a handoff from inconsistent ledgers")
+    done = {t["id"] for t in queue["tasks"] if t["status"] == "DONE"}
+    remaining = []
+    owner_actions = {
+        "DEV": "Complete missing coding, tests and any specified real inference gate",
+        "HUMAN_TEST": "Perform and independently attest real physical/device tests",
+        "REVIEW": "Independently review actual source material and factual accuracy",
+        "LEGAL": "Obtain real legal/license review and distribution authorization",
+        "DECISION": "Obtain explicit owner product-scope decision",
+        "PORTAL": "Verify real Wiedora staging deployment, GUI and full host regression",
+    }
+    for task in queue["tasks"]:
+        if task["status"] == "DONE":
+            continue
+        unmet = [dep for dep in task["depends_on"] if dep not in done]
+        refs = task.get("evidence_refs", [])
+        remaining.append({
+            "id": task["id"], "stage": task["stage"],
+            "owner": task["owner"], "priority": task["priority"],
+            "status": task["status"], "task_scope": task["title"],
+            "acceptance_id": task["acceptance_id"],
+            "unmet_dependencies": unmet,
+            "dependency_ready": not unmet and task["status"] != "BLOCKED",
+            "required_external_action": owner_actions[task["owner"]],
+            "prior_evidence_urls": [
+                ref for ref in refs
+                if isinstance(ref, str) and ref.startswith("https://github.com/")
+            ] if isinstance(refs, list) else [],
+            "verified_implementation_sha": None,
+            "requires_independent_evidence_review": True,
+        })
+    work = [item for item in remaining if item["owner"] == "PORTAL"]
+    other = [item for item in remaining if item["owner"] != "PORTAL"]
+    return {
+        "schema": "videonotes-operator-handoff-v1",
+        "repository": queue["repository"],
+        "ledger_sources": ["docs/VN_MICROTASKS.json", "docs/VN_STATUS.json"],
+        "stages": stage_ledger["totals"],
+        "remaining_count": len(remaining),
+        "counts_by_owner": dict(sorted(Counter(item["owner"] for item in remaining).items())),
+        "work": {
+            "count": len(work),
+            "dependency_ready_count": sum(item["dependency_ready"] for item in work),
+            "tasks": work,
+        },
+        "non_work": {"count": len(other), "tasks": other},
+        "work_assist_only": ["VN-07-03"] if any(
+            item["id"] == "VN-07-03" for item in other
+        ) else [],
+        "notes": [
+            "Dependency-ready is not a verified environment, hardware or acceptance PASS.",
+            "Work-assist-only tasks still need independent operator/human acceptance.",
+            "Evidence links and implementation SHA must be checked against actual GitHub and deployed code.",
+            "No task status is changed; this output does not authorize paid operations.",
+        ],
+        "verified_commit_sha": None,
+        "formal_acceptance_completed_by_this_report": False,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Read-only KWN microtask plan integrity check")
     parser.add_argument("--queue", type=Path, default=TASK_FILE)
     parser.add_argument("--stages", type=Path, default=STATUS_FILE)
+    parser.add_argument(
+        "--handoff", action="store_true",
+        help="Show dependency-scoped Work/operator handoff without changing ledgers",
+    )
     args = parser.parse_args()
     queue = json.loads(args.queue.read_text(encoding="utf-8"))
     stage_ledger = json.loads(args.stages.read_text(encoding="utf-8"))
@@ -231,7 +304,10 @@ def main() -> int:
     if errors:
         print(json.dumps({"valid": False, "errors": errors}, indent=2))
         return 1
-    print(json.dumps({"valid": True, **summary(queue, stage_ledger)}, ensure_ascii=False, indent=2))
+    result = handoff(queue, stage_ledger) if args.handoff else summary(queue, stage_ledger)
+    # ASCII-safe wire JSON works under Windows cp1252/cp437 as well as UTF-8.
+    # The receiving parser reconstructs the original Unicode task titles.
+    print(json.dumps({"valid": True, **result}, ensure_ascii=bool(args.handoff), indent=2))
     return 0
 
 
