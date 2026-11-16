@@ -76,6 +76,101 @@ class BoundedLlamaProcessTest(unittest.TestCase):
             self.assertGreaterEqual(runner.runs[0]["elapsed_s"], 0)
             self.assertIn("sampled_cpu_s", runner.runs[0])
 
+class GGUFProvenanceTest(unittest.TestCase):
+    """The inference call is mocked; these tests do not run a real GGUF."""
+
+    def _inputs(self, directory):
+        import struct
+        folder = Path(directory)
+        model = folder / "fake-model.gguf"
+        model.write_bytes(struct.pack("<4sIQQ", b"GGUF", 3, 1, 0) + b"X")
+        cli = folder / "fake-llama.exe"
+        cli.write_bytes(b"synthetic binary content, not executable")
+        return model, cli, folder / "private-results"
+
+    def _draft(self, _project, output, *, model, llama_cli, runner):
+        output.write_bytes(b"synthetic private draft")
+        return {"model_sha256": "a" * 64, "sections": 1, "claims": 2}
+
+    def _verify(self, _project, output):
+        from videonotes.contracts import sha256_file
+        return {
+            "verified_source_citations": True, "source_sha256": "b" * 64,
+            "document_sha256": sha256_file(output),
+        }
+
+    def test_report_binds_cli_transcript_and_draft_without_accepting_facts(self):
+        import hashlib
+        from unittest.mock import patch
+        from scripts.semantic_gguf_acceptance import run
+        with tempfile.TemporaryDirectory() as directory:
+            model, cli, out = self._inputs(directory)
+            with patch("scripts.semantic_gguf_acceptance.create_semantic_draft",
+                       side_effect=self._draft) as called, patch(
+                       "scripts.semantic_gguf_acceptance.verify_semantic_draft",
+                       side_effect=self._verify):
+                report = run(Path(directory), model, str(cli), out)
+            self.assertEqual(report["llama_cli_sha256"], hashlib.sha256(cli.read_bytes()).hexdigest())
+            self.assertEqual(report["source_sha256"], "b" * 64)
+            self.assertEqual(report["draft_sha256"],
+                             hashlib.sha256((out / "private-draft.json").read_bytes()).hexdigest())
+            self.assertEqual(report["human_reviewed"], False)
+            self.assertEqual(report["semantic_facts_verified"], False)
+            self.assertIn("NOT_RUN", report["acceptance"])
+            self.assertNotIn(str(cli), (out / "report.json").read_text("utf-8"))
+            self.assertEqual(called.call_args.kwargs["llama_cli"], str(cli.absolute()))
+            self.assertEqual(__import__("json").loads((out / "report.json").read_text("utf-8")), report)
+
+    def test_refuse_changed_executable_without_writing_success_report(self):
+        from unittest.mock import patch
+        from scripts.semantic_gguf_acceptance import run
+        with tempfile.TemporaryDirectory() as directory:
+            model, cli, out = self._inputs(directory)
+            def replace_cli(*args, **kwargs):
+                cli.write_bytes(b"changed executable with the same size")  # changed after preflight
+                return self._draft(*args, **kwargs)
+            with patch("scripts.semantic_gguf_acceptance.create_semantic_draft",
+                       side_effect=replace_cli), patch(
+                       "scripts.semantic_gguf_acceptance.verify_semantic_draft",
+                       side_effect=self._verify):
+                with self.assertRaisesRegex(VideoNotesError, "zmieniły"):
+                    run(Path(directory), model, str(cli), out)
+            self.assertFalse((out / "report.json").exists())
+
+    def test_refuse_changed_draft_without_writing_success_report(self):
+        from unittest.mock import patch
+        from scripts.semantic_gguf_acceptance import run
+        with tempfile.TemporaryDirectory() as directory:
+            model, cli, out = self._inputs(directory)
+            def changed_draft(project, draft):
+                report = self._verify(project, draft)
+                draft.write_bytes(b"synthetic private draft altered")
+                return report
+            with patch("scripts.semantic_gguf_acceptance.create_semantic_draft",
+                       side_effect=self._draft), patch(
+                       "scripts.semantic_gguf_acceptance.verify_semantic_draft",
+                       side_effect=changed_draft):
+                with self.assertRaisesRegex(VideoNotesError, "zmieniły"):
+                    run(Path(directory), model, str(cli), out)
+            self.assertFalse((out / "report.json").exists())
+
+    def test_refuse_symlink_result_directory(self):
+        from unittest.mock import patch
+        from scripts.semantic_gguf_acceptance import run
+        with tempfile.TemporaryDirectory() as directory:
+            model, cli, out = self._inputs(directory)
+            real = Path(directory) / "real"
+            real.mkdir()
+            try:
+                out.symlink_to(real, target_is_directory=True)
+            except (OSError, NotImplementedError):
+                self.skipTest("The platform does not permit symlink creation")
+            with patch("scripts.semantic_gguf_acceptance.create_semantic_draft",
+                       side_effect=self._draft):
+                with self.assertRaisesRegex(VideoNotesError, "dowiązaniem"):
+                    run(Path(directory), model, str(cli), out)
+            self.assertFalse((real / "report.json").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

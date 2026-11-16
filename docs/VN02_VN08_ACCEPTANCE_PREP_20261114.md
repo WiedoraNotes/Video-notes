@@ -14,6 +14,8 @@ python scripts/semantic_gguf_acceptance.py --project "C:\KWN\projekt" --model "C
 
 Skrypt uruchamia rzeczywisty lokalny proces llama-cli poprzez istniejące semantic-draft, sprawdza stabilne ID cytatów, czasy, związanie ze źródłem i zapisuje report.json (czas; opcjonalnie próbkowany RAM/CPU przez psutil). private-draft.json zawiera cytaty z transkrypcji: nigdy nie wysyłać tego katalogu do GitHub. Po przerwaniu i ponownej próbie wybrać nowy katalog, by zachować wcześniejsze wyniki.
 
+Od 16.11.2026 prywatny `report.json` zapisuje ponadto SHA-256 lokalnego programu `llama-cli`, poprawionej transkrypcji (`source_sha256`) oraz wygenerowanego szkicu (`draft_sha256`). Skrypt rozwiązuje ścieżkę programu przed uruchomieniem i nie tworzy raportu powodzenia, gdy plik wykonywalny lub szkic ulegnie zmianie przed końcową kontrolą. Odrzuca również katalog wyjściowy będący dowiązaniem symbolicznym. Są to techniczne identyfikatory wejść i wyników, nie poświadczenie jakości modelu ani licencji. Żaden plik modelu nie jest pobierany do CI.
+
 Raport nie uznaje treści za zgodną z rzeczywistym nagraniem. Wymagane są nadal: licencjonowany model, test naturalnej mowy, poprawność liczb i definicji na źródle, ręczny review/approve/reject, pełny sprzętowy pomiar RAM/CPU i sprawdzenie po restarcie. Atrapom w testach jednostkowych nie przyznawać statusu odbioru. Brak takiego dowodu oznacza pozostawienie VN-02-01 bez DONE.
 
 ### Limity rzeczywistego procesu lokalnego GGUF
