@@ -13,6 +13,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from videonotes.asr_lab import _stop_process_tree
 from videonotes.errors import VideoNotesError
+from videonotes.contracts import sha256_file
+from videonotes.media import executable
 from videonotes.gguf_probe import inspect_gguf_header
 from videonotes.semantic_process import run_bounded_llama
 from videonotes.semantic_draft import (
@@ -62,19 +64,45 @@ class MetricsRunner:
 
 
 def run(project: Path, model: Path, binary: str, out: Path) -> dict:
+    """Collect local provenance. A successful report is NOT human acceptance."""
     header = inspect_gguf_header(model)
-    out = out.expanduser().absolute()
+    # Resolve the CLI once, then launch this very path rather than looking it
+    # up again via PATH after the preflight.
+    cli_path = Path(executable(binary)).absolute()
+    if cli_path.is_symlink() or not cli_path.is_file():
+        raise VideoNotesError("Program llama-cli musi być lokalnym zwykłym plikiem.")
+    try:
+        cli_sha256 = sha256_file(cli_path)
+    except OSError as error:
+        raise VideoNotesError("Nie można bezpiecznie odczytać programu llama-cli.") from error
+    out = Path(out).expanduser().absolute()
+    if out.is_symlink():
+        raise VideoNotesError("Katalog odbioru nie może być dowiązaniem.")
     out.mkdir(parents=True, exist_ok=True)
+    if not out.is_dir() or out.is_symlink():
+        raise VideoNotesError("Katalog odbioru musi być zwykłym katalogiem.")
     draft, report_file = out / "private-draft.json", out / "report.json"
     if any(p.exists() or p.is_symlink() for p in (draft, report_file)):
         raise VideoNotesError("Wybierz nowy katalog odbioru.")
     runner = MetricsRunner()
     result = create_semantic_draft(project, draft, model=model,
-                                   llama_cli=binary, runner=runner)
+                                   llama_cli=str(cli_path), runner=runner)
     verification = verify_semantic_draft(project, draft)
+    # Never produce a positive technical report if the executable or the
+    # private draft changed while the invocation was taking place.
+    try:
+        stable = (sha256_file(cli_path) == cli_sha256
+                  and sha256_file(draft) == verification["document_sha256"])
+    except OSError as error:
+        raise VideoNotesError("Nie można ponownie sprawdzić plików odbioru.") from error
+    if not stable:
+        raise VideoNotesError("Program llama-cli lub szkic zmieniły się podczas próby.")
     record = {
         "schema": "videonotes-gguf-run-v1", "header": header,
         "model_sha256": result["model_sha256"],
+        "llama_cli_sha256": cli_sha256,
+        "source_sha256": verification["source_sha256"],
+        "draft_sha256": verification["document_sha256"],
         "sections": result["sections"], "claims": result["claims"],
         "citations_verified": verification["verified_source_citations"],
         "human_reviewed": False, "semantic_facts_verified": False,
