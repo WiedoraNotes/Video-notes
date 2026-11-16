@@ -118,7 +118,7 @@ class GGUFProvenanceTest(unittest.TestCase):
             self.assertEqual(report["semantic_facts_verified"], False)
             self.assertIn("NOT_RUN", report["acceptance"])
             self.assertNotIn(str(cli), (out / "report.json").read_text("utf-8"))
-            self.assertEqual(called.call_args.kwargs["llama_cli"], str(cli.absolute()))
+            self.assertEqual(Path(called.call_args.kwargs["llama_cli"]).resolve(), cli.resolve())
             self.assertEqual(__import__("json").loads((out / "report.json").read_text("utf-8")), report)
 
     def test_refuse_changed_executable_without_writing_success_report(self):
