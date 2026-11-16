@@ -26,6 +26,17 @@ RECEIPT_KEYS = {
     "attested_by_human", "independently_reviewed", "evidence_url",
 }
 
+SOURCE_REPOS = ("WiedoraNotes/Video-notes", "testowyemailaplikacja-spec/Video-notes")
+PORTAL_REPOS = ("wiedoraWeb/Constant_app", "testowyemailaplikacja-spec/Constant_app")
+
+
+def _scoped_metadata_url(value: object, repos: tuple[str, ...], path: str) -> bool:
+    """Validate exact repository and resource type; legacy evidence remains readable."""
+    return isinstance(value, str) and any(
+        re.fullmatch(r"https://github[.]com/" + re.escape(repo) + path, value) is not None
+        for repo in repos
+    )
+
 
 def validate_acceptance_receipt(task: dict) -> list[str]:
     """Require a reviewable, scoped receipt before any non-DEV microtask is DONE.
@@ -65,9 +76,10 @@ def validate_acceptance_receipt(task: dict) -> list[str]:
     except ValueError:
         errors.append(f"{uid}: invalid or future acceptance date")
     url = receipt.get("evidence_url")
-    if (not isinstance(url, str) or not re.fullmatch(
-        r"https://github[.]com/testowyemailaplikacja-spec/(?:Video-notes|Constant_app)/issues/[1-9][0-9]*", url
-    ) or url not in task.get("evidence_refs", [])):
+    issue_repos = PORTAL_REPOS if expected_kind == "PORTAL_REVIEW" else SOURCE_REPOS
+    references = task.get("evidence_refs")
+    if (not _scoped_metadata_url(url, issue_repos, r"/issues/[1-9][0-9]*")
+            or not isinstance(references, list) or url not in references):
         errors.append(f"{uid}: receipt needs registered metadata-only GitHub issue")
     if expected_kind == "PORTAL_REVIEW":
         deployed = receipt.get("deployed_sha")
@@ -75,9 +87,7 @@ def validate_acceptance_receipt(task: dict) -> list[str]:
         if (not isinstance(deployed, str) or not re.fullmatch(r"[0-9a-f]{40}", deployed)
                 or receipt.get("environment_verified") is not True):
             errors.append(f"{uid}: portal receipt requires verified deployed SHA")
-        if not isinstance(run_url, str) or not re.fullmatch(
-            r"https://github[.]com/testowyemailaplikacja-spec/Constant_app/actions/runs/[1-9][0-9]*", run_url
-        ):
+        if not _scoped_metadata_url(run_url, PORTAL_REPOS, r"/actions/runs/[1-9][0-9]*"):
             errors.append(f"{uid}: portal receipt needs a reviewable full-regression run")
     return errors
 
@@ -95,6 +105,10 @@ def audit(queue: dict, stage_ledger: dict) -> list[str]:
     phases = stage_ledger.get("phases")
     if not isinstance(tasks, list) or not isinstance(phases, list):
         return ["Missing tasks or stage phases list"]
+    if queue.get("repository") != SOURCE_REPOS[0]:
+        errors.append("Microtask ledger repository mismatch")
+    if stage_ledger.get("owner_repo") != SOURCE_REPOS[0]:
+        errors.append("Stage ledger repository mismatch")
     expected = {f"VN-{index:02d}" for index in range(9)}
     registered = {p.get("id") for p in phases if isinstance(p, dict)}
     if registered != expected:
